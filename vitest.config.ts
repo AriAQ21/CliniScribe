@@ -8,9 +8,9 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "jsdom",
-    setupFiles: "./src/tests/setup.ts", // optional if you want a setup file
+    setupFiles: "./tests/setup.ts", // 👈 points to your root-level tests folder
     alias: {
-      "@": path.resolve(__dirname, "src"),
+      "@": path.resolve(__dirname, "frontend/src"), // still maps @ → frontend/src
     },
   },
 });
