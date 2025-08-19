@@ -10,8 +10,8 @@ export default defineConfig({
     },
   },
   test: {
-    globals: true,        // so you can use "vi", "describe", etc.
-    environment: "jsdom", // simulate browser for React components
-    setupFiles: "./tests/setup.ts", // optional, for shared mocks
+    globals: true,        // vi, describe, it, expect, etc. available
+    environment: "jsdom", // simulates browser APIs
+    setupFiles: "./tests/setup.ts",
   },
 });
