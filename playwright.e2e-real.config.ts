@@ -12,4 +12,5 @@ export default defineConfig({
     video: 'retain-on-failure',
   },
   retries: process.env.CI ? 1 : 0,
+  reporter: 'list',
 });
