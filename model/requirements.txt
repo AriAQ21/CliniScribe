@@ -1,0 +1,15 @@
+torch==2.1.0
+torchaudio==2.1.0
+transformers==4.39.3
+datasets==2.18.0
+soundfile
+ffmpeg-python
+huggingface-hub
+librosa==0.10.1
+pyannote.audio==3.1.1
+numpy<2.0
+scikit-learn
+accelerate
+uvicorn
+fastapi
+python-multipart
