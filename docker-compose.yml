@@ -1,0 +1,96 @@
+# docker-compose.yml
+version: '3.8'
+
+services:
+
+  # Frontend Service (React)
+  frontend:
+    image: node:18-alpine
+    container_name: medical-transcription-frontend
+    working_dir: /app
+    volumes:
+      - .:/app
+      - /app/node_modules
+    ports:
+      - "8081:8081"
+    environment:
+      - VITE_API_URL=http://localhost:${BACKEND_PORT}
+    command: >
+      sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 8081"
+    networks:
+      - medical-network
+
+  # Backend Service (FastAPI)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: medical-transcription-backend
+    restart: always
+    ports:
+      - "${BACKEND_PORT}:8000"
+    volumes:
+      - ./backend:/app
+      - /home/arifqawi/storage/audio_files:/app/storage/audio_files
+      - /home/arifqawi/storage/json_files:/app/storage/json_files
+      - /home/arifqawi/storage/transcription_files:/app/storage/transcription_files
+    environment:
+      AUDIO_FILES_DIR: /app/storage/audio_files
+      JSON_FILES_DIR: /app/storage/json_files
+      TRANSCRIPTION_FILES_DIR: /app/storage/transcription_files
+      MODEL_API_URL: http://model:${MODEL_PORT}
+      SUPABASE_URL: https://yzcbfoyeronncccedhap.supabase.co
+      SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6Y2Jmb3llcm9ubmNjY2VkaGFwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwNzQ4NDIsImV4cCI6MjA2OTY1MDg0Mn0.R1NZuBDECcO-IeYVb95PvZ902HQQBQFTeplp7pekUaA
+    depends_on:
+      - model
+    networks:
+      - medical-network
+
+  # Model Service (ML Transcription)
+  model:
+    build:
+      context: ./model
+      dockerfile: Dockerfile
+    container_name: medical-transcription-model
+    restart: always
+    ports:
+      - "${MODEL_PORT}:5005"
+    volumes:
+      - /home/arifqawi/storage/audio_files:/app/storage/audio_files
+      - /home/arifqawi/storage/json_files:/app/storage/json_files
+      - /home/arifqawi/storage/transcription_files:/app/storage/transcription_files
+    environment:
+      - HF_TOKEN=${HF_TOKEN}
+    networks:
+      - medical-network
+
+  # Queue Processor Service
+  queue-processor:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: medical-transcription-queue
+    restart: always
+    volumes:
+      - ./backend:/app
+      - /home/arifqawi/storage/audio_files:/app/storage/audio_files
+      - /home/arifqawi/storage/json_files:/app/storage/json_files
+      - /home/arifqawi/storage/transcription_files:/app/storage/transcription_files
+    environment:
+      AUDIO_FILES_DIR: /app/storage/audio_files
+      JSON_FILES_DIR: /app/storage/json_files
+      TRANSCRIPTION_FILES_DIR: /app/storage/transcription_files
+      MODEL_API_URL: http://model:${MODEL_PORT}
+      SUPABASE_URL: https://yzcbfoyeronncccedhap.supabase.co
+      SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6Y2Jmb3llcm9ubmNjY2VkaGFwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQwNzQ4NDIsImV4cCI6MjA2OTY1MDg0Mn0.R1NZuBDECcO-IeYVb95PvZ902HQQBQFTeplp7pekUaA
+    command: ["python", "queue_processor.py"]
+    depends_on:
+      - model
+      - backend
+    networks:
+      - medical-network
+
+# Network for service communication
+networks:
+  medical-network:
+    driver: bridge

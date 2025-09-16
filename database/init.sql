@@ -1,0 +1,73 @@
+-- Schema: users table
+CREATE TABLE users (
+    user_id SERIAL PRIMARY KEY,
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100) NOT NULL,
+    role VARCHAR(50),
+    location VARCHAR(100)
+);
+
+-- Schema: audio_recordings table
+CREATE TABLE audio_recordings (
+    audio_id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    filename VARCHAR(255) NOT NULL,
+    meeting_type VARCHAR(10) CHECK (meeting_type IN ('gp', 'mdt', 'ward')),
+    upload_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(50) NOT NULL CHECK (status IN ('queued', 'processing', 'transcribed', 'error')),
+    deleted_at TIMESTAMP
+);
+
+-- Schema: transcriptions table
+CREATE TABLE transcriptions (
+    transcription_id SERIAL PRIMARY KEY,
+    audio_id INTEGER NOT NULL UNIQUE REFERENCES audio_recordings(audio_id) ON DELETE CASCADE,
+    transcribed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    transcript_filename VARCHAR(255) NOT NULL,
+    metadata_filename VARCHAR(255) NOT NULL,
+    appointment_time TIME,
+    location VARCHAR(100),
+    role VARCHAR(100),
+    no_of_speakers INTEGER,
+    meeting_type VARCHAR(10) CHECK (meeting_type IN ('gp', 'mdt', 'ward'))
+);
+
+-- Schema: appointments table
+CREATE TABLE appointments (
+    appointment_id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    appointment_date DATE NOT NULL,
+    appointment_time TIME NOT NULL,
+    room VARCHAR(100) NOT NULL,
+    patient_name VARCHAR(255) NOT NULL,
+    doctor_name VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Dummy user data
+INSERT INTO users (first_name, last_name, role, location) VALUES
+('Alice', 'Nguyen', 'GP', 'Room 1'),
+('Ben', 'Turner', 'GP', 'Room 2'),
+('Cara', 'Singh', 'GP', 'Room 3'),
+('David', 'Okafor', 'GP', 'Room 4'),
+('Ella', 'Martinez', 'GP', 'Room 5');
+
+-- Dummy appointment data
+INSERT INTO appointments (user_id, appointment_date, appointment_time, room, patient_name, doctor_name) VALUES
+-- Alice's appointments (user_id: 1)
+(1, '2025-08-09', '09:00:00', 'Room 1', 'John Smith', 'Dr. Alice Nguyen'),
+(1, '2025-08-09', '10:30:00', 'Room 1', 'Sarah Jones', 'Dr. Alice Nguyen'),
+(1, '2025-08-09', '14:00:00', 'Room 1', 'Michael Brown', 'Dr. Alice Nguyen'),
+-- Ben's appointments (user_id: 2)
+(2, '2025-08-09', '09:30:00', 'Room 2', 'Emily Davis', 'Dr. Ben Turner'),
+(2, '2025-08-09', '11:00:00', 'Room 2', 'James Wilson', 'Dr. Ben Turner'),
+-- Cara's appointments (user_id: 3)
+(3, '2025-08-09', '08:30:00', 'Room 3', 'Lisa Thompson', 'Dr. Cara Singh'),
+(3, '2025-08-09', '15:30:00', 'Room 3', 'Robert Miller', 'Dr. Cara Singh'),
+-- David's appointments (user_id: 4)
+(4, '2025-08-09', '10:00:00', 'Room 4', 'Jennifer Garcia', 'Dr. David Okafor'),
+(4, '2025-08-09', '13:30:00', 'Room 4', 'William Martinez', 'Dr. David Okafor'),
+-- Ella's appointments (user_id: 5)
+(5, '2025-08-09', '11:30:00', 'Room 5', 'Amanda Rodriguez', 'Dr. Ella Martinez'),
+(5, '2025-08-09', '16:00:00', 'Room 5', 'Christopher Lee', 'Dr. Ella Martinez');
+
