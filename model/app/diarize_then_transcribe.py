@@ -78,7 +78,7 @@ def run_diarization(
     audio_path: str,
     min_turn: float = 0.5,
     merge_gap: float = 0.3,
-    num_speakers: Optional[int] = None,
+    num_speakers: int = 2,  
 ) -> List[Dict]:
     """
     Returns CLEANED diarization turns: list of {"speaker","start","end"}, sorted by start.
@@ -368,58 +368,48 @@ def smooth_unknown_islands(words: List[Dict]) -> List[Dict]:
 # ------------------------------- Public API ---------------------------------
 
 def diarize_then_transcribe(audio_path: str, output_path: str):
-    print(">>> Starting diarization-first pipeline")
-    print(f"Audio path: {audio_path}")
-
-    # Load ASR
+    print(">>> Pipeline: ASR + diarization + alignment")
     device, dtype, pipe_device = get_device_and_dtype()
     asr = load_whisper_pipeline(device, dtype, pipe_device)
 
-    # Load audio
     wav, sr = load_audio_mono(audio_path)
     sample = {"array": wav, "sampling_rate": sr}
+    audio_dur = len(wav) / float(sr)
 
-    # Step 1: Transcribe
     print("Transcribing…")
     result = asr(sample, return_timestamps="word")
     words = collapse_nearby_duplicate_words(normalize_words_from_asr_result(result))
 
-    # Step 2: Diarization
     print("Running diarization…")
     turns_clean = run_diarization(audio_path)
-    bounds = diarization_boundaries(turns_clean)
-    print("Diarization complete.")
+    turns_padded = pad_turns(turns_clean, pad=0.25, max_time=audio_dur)
+    bounds = diarization_boundaries(turns_padded)
 
-    # Step 3: Label words with speakers
     labeled_words = []
     for w in words:
-        spk, _ = find_label_for_span(w["start"], w["end"], turns_clean, bounds, min_overlap=0.06)
+        spk, _ = find_label_for_span(w["start"], w["end"], turns_padded, bounds, min_overlap=0.06)
         labeled_words.append({**w, "speaker": spk})
 
-    # Step 4: Smooth Unknown islands
     labeled_words = smooth_unknown_islands(labeled_words)
-
-    # Step 5: Group into segments
     labeled_words.sort(key=lambda x: (x["start"], x["end"]))
+
     segments = group_labeled_words(labeled_words, max_merge_gap_out=0.6)
     segments = coalesce_consecutive_same_speaker(segments)
-
-    # Step 6: Clean repeated phrases
     for seg in segments:
         seg["text"] = collapse_adjacent_repeated_ngrams(seg["text"], max_n=6)
 
-    # Step 7: Write merged transcript
     with open(output_path, "w", encoding="utf-8") as f:
         for seg in segments:
             if seg["end"] <= seg["start"]:
                 seg["end"] = seg["start"] + 0.01
-            final_text = " ".join(seg["text"]).strip()
-            final_text = compact_double_words(final_text)
-            line = f"[{seg['speaker']} {fmt_ts(seg['start'])} - {fmt_ts(seg['end'])}]: {final_text}\n"
+            text = compact_double_words(" ".join(seg["text"]).strip())
+            line = f"[{seg['speaker']} {fmt_ts(seg['start'])} - {fmt_ts(seg['end'])}]: {text}\n"
             print(line, end="")
             f.write(line)
 
-    print(f"\nSpeaker-attributed transcript saved to {output_path}")
+    print(f"\nTranscript saved to {output_path}")
+
+
 
 
 # ----------------------------- CLI entrypoint -------------------------------
