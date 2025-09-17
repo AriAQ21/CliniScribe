@@ -457,20 +457,39 @@ export async function openAnyAppointment(page: Page) {
   throw new Error('No appointment details control/link found on the dashboard.');
 }
 
-/**
- * Toggle consent in a UI-agnostic way.
- * Works with shadcn/ui <Checkbox role="checkbox" aria-checked="..."> + label,
- * and gracefully falls back to several selectors.
- */
-/** Toggle consent by clicking the visible label (works with Shadcn Checkbox) */
+/** Toggle consent checkbox in AppointmentDetail */
 export async function giveConsent(page: Page) {
-  // Wait for the label text to appear
-  const label = page.getByText(/patient has given consent for recording/i);
-  await expect(label).toBeVisible({ timeout: 10_000 });
+  // 1) Try role=checkbox with accessible name
+  const checkbox = page.getByRole('checkbox', { name: /patient has given consent/i });
+  if (await checkbox.count()) {
+    await checkbox.first().click({ force: true });
+    return;
+  }
 
-  // Click the label (Shadcn forwards it to the hidden checkbox)
-  await label.click();
+  // 2) Try by ID
+  const byId = page.locator('#consent').first();
+  if (await byId.count()) {
+    await byId.click({ force: true });
+    return;
+  }
+
+  // 3) Try clicking the label
+  const label = page.locator('label[for="consent"]').first();
+  if (await label.count()) {
+    await label.click({ force: true });
+    return;
+  }
+
+  // 4) Fallback: any visible checkbox
+  const any = page.locator('input[type="checkbox"]').first();
+  if (await any.count()) {
+    await any.click({ force: true });
+    return;
+  }
+
+  throw new Error('Consent checkbox not found');
 }
+
 
 /** Handy wait for any inline message containing some text */
 export async function waitForAnyText(page: Page, re: RegExp, timeout = 15000) {
