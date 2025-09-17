@@ -16,6 +16,16 @@ test.describe('Transcription Flow (seeded Test User)', () => {
 
     await login(page);  
 
+    // --- Step 1: Seed a "Test Appointment" so the dashboard shows it
+    await seedDashboardAppointments(page, [
+      {
+        id: '123',
+        patientName: 'Test Appointment',
+        doctorName: 'Dr. Smith',
+        room: 'Room 101',
+      },
+    ]);
+
     // --- Step 1: Go to dashboard
     await page.goto('/dashboard');
 
