@@ -7,14 +7,15 @@
 // Sending for transcription
 // Seeing confirmation of transcription
 
-// tests/e2e-real/transcription-flow.e2e.spec.ts
 
 import { test, expect } from '@playwright/test';
-
-test.use({ storageState: 'storageState.json' });
+import { login } from '../utils';  
 
 test.describe('Transcription Flow (seeded Test User)', () => {
   test('select a "Test" appointment with Not started status → transcription flow works', async ({ page }) => {
+
+    await login(page);  
+
     // --- Step 1: Go to dashboard
     await page.goto('/dashboard');
 
