@@ -462,32 +462,42 @@ export async function openAnyAppointment(page: Page) {
  * Works with shadcn/ui <Checkbox role="checkbox" aria-checked="..."> + label,
  * and gracefully falls back to several selectors.
  */
+/** Toggle consent by clicking the visible label (works with Shadcn Checkbox) */
 export async function giveConsent(page: Page) {
-  // console.log('🧪 giveConsent: Starting consent detection');
+  // Wait for the label text to appear
+  const label = page.getByText(/patient has given consent for recording/i);
+  await expect(label).toBeVisible({ timeout: 10_000 });
+
+  // Click the label (Shadcn forwards it to the hidden checkbox)
+  await label.click();
+}
+
+// export async function giveConsent(page: Page) {
+//   // console.log('🧪 giveConsent: Starting consent detection');
   
-  // Wait for page to be loaded and stable
-  await page.waitForLoadState('networkidle');
-  await page.waitForTimeout(1000);
+//   // Wait for page to be loaded and stable
+//   await page.waitForLoadState('networkidle');
+//   await page.waitForTimeout(1000);
   
-  // console.log('🧪 giveConsent: Looking for consent elements...');
+//   // console.log('🧪 giveConsent: Looking for consent elements...');
   
-  // 1) Try the accessible checkbox first - most reliable
-  // console.log('🧪 giveConsent: Trying role checkbox with consent name');
-  const cb = page.getByRole('checkbox', { name: /consent|patient has given consent/i });
-  if (await cb.count()) {
-    try {
-      await cb.waitFor({ state: 'visible', timeout: 10000 });
-      const state = await cb.getAttribute('aria-checked');
-      // console.log('🧪 giveConsent: Found consent checkbox, current state:', state);
-      if (state !== 'true') {
-        await cb.click({ force: true });
-        // console.log('🧪 giveConsent: Successfully clicked consent checkbox');
-      }
-      return;
-    } catch (error) {
-      // console.log('🧪 giveConsent: Role checkbox failed:', error);
-    }
-  }
+//   // 1) Try the accessible checkbox first - most reliable
+//   // console.log('🧪 giveConsent: Trying role checkbox with consent name');
+//   const cb = page.getByRole('checkbox', { name: /consent|patient has given consent/i });
+//   if (await cb.count()) {
+//     try {
+//       await cb.waitFor({ state: 'visible', timeout: 10000 });
+//       const state = await cb.getAttribute('aria-checked');
+//       // console.log('🧪 giveConsent: Found consent checkbox, current state:', state);
+//       if (state !== 'true') {
+//         await cb.click({ force: true });
+//         // console.log('🧪 giveConsent: Successfully clicked consent checkbox');
+//       }
+//       return;
+//     } catch (error) {
+//       // console.log('🧪 giveConsent: Role checkbox failed:', error);
+//     }
+//   }
 
   // 2) Try by direct ID #consent
   // console.log('🧪 giveConsent: Trying by ID #consent');
