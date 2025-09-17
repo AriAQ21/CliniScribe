@@ -17,6 +17,44 @@ interface UnifiedAppointmentsListProps {
   selectedDate: Date;
 }
 
+// --- helper: minutes since midnight from common time formats
+function toMinutesSinceMidnight(raw: string): number {
+  if (!raw) return Number.POSITIVE_INFINITY;
+  const s = raw.trim().toUpperCase();
+
+  // 12h formats: "H:MM AM", "H:MM:SS PM", "7PM", "7:15PM"
+  const m12 = s.match(/^(\d{1,2})(?::(\d{2}))?(?::(\d{2}))?\s*(AM|PM)$/i);
+  if (m12) {
+    let h = parseInt(m12[1], 10);
+    const min = parseInt(m12[2] ?? "0", 10);
+    // const sec = parseInt(m12[3] ?? "0", 10); // not used
+    const ampm = m12[4].toUpperCase();
+    if (ampm === "AM") {
+      if (h === 12) h = 0;
+    } else {
+      if (h !== 12) h += 12;
+    }
+    return h * 60 + min;
+  }
+
+  // 24h formats: "HH:MM", "HH:MM:SS"
+  const m24 = s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (m24) {
+    const h = parseInt(m24[1], 10);
+    const min = parseInt(m24[2], 10);
+    return h * 60 + min;
+  }
+
+  // Very loose fallback: just try Date parse (last resort)
+  const d = new Date(`1970-01-01T${raw}`);
+  if (!isNaN(d.getTime())) {
+    return d.getHours() * 60 + d.getMinutes();
+  }
+
+  // Unknown format → push to end
+  return Number.POSITIVE_INFINITY;
+}
+
 export function UnifiedAppointmentsList({ 
   dummyAppointments, 
   importedAppointments, 
@@ -38,30 +76,26 @@ export function UnifiedAppointmentsList({
     selectedDate.getDate()
   );
 
-  const filteredDummyAppointments = dummyAppointments.filter(apt => {
-    if (!apt.date) return false;
+  // Dummy only when viewing *today*
+  const filteredDummy = dummyAppointments.filter((apt) => {
+    if (!apt?.date) return false;
     return selectedDateOnly.getTime() === todayOnly.getTime();
   });
 
-  // --- Imported appointments: filter by selected date
-  const filteredImportedAppointments = importedAppointments.filter(apt => {
-    if (!apt.date) return false;
-    const appointmentDate = new Date(apt.date);
-    const appointmentDateOnly = new Date(
-      appointmentDate.getFullYear(),
-      appointmentDate.getMonth(),
-      appointmentDate.getDate()
-    );
-    return appointmentDateOnly.getTime() === selectedDateOnly.getTime();
+  // Imported only for the selected date
+  const filteredImported = importedAppointments.filter((apt) => {
+    if (!apt?.date) return false;
+    const d = new Date(apt.date);
+    const dOnly = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    return dOnly.getTime() === selectedDateOnly.getTime();
   });
 
-  // Merge both
-  const allAppointments = [...filteredDummyAppointments, ...filteredImportedAppointments];
-
-  // Sort by time
-  const sortedAppointments = [...allAppointments].sort(
-    (a, b) => a.time.localeCompare(b.time)
-  );
+  // Merge then sort by parsed time
+  const sortedAppointments = [...filteredDummy, ...filteredImported].sort((a, b) => {
+    const ma = toMinutesSinceMidnight(a.time);
+    const mb = toMinutesSinceMidnight(b.time);
+    return ma - mb || String(a.id).localeCompare(String(b.id)); // stable tie-breaker
+  });
 
   if (sortedAppointments.length === 0) {
     return (
