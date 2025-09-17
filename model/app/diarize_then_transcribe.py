@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import re
+import sys
 from typing import List, Dict, Tuple, Optional
 import torch
 import numpy as np
@@ -367,50 +368,49 @@ def smooth_unknown_islands(words: List[Dict]) -> List[Dict]:
 # ------------------------------- Public API ---------------------------------
 
 def diarize_then_transcribe(audio_path: str, output_path: str):
-    print(">>> Pipeline 6: Full-audio ASR + word-level alignment")
+    print(">>> Starting diarization-first pipeline")
     print(f"Audio path: {audio_path}")
 
-    # Device & ASR
     device, dtype, pipe_device = get_device_and_dtype()
     asr = load_whisper_pipeline(device, dtype, pipe_device)
 
-    # Load audio
     wav, sr = load_audio_mono(audio_path)
     sample = {"array": wav, "sampling_rate": sr}
-    audio_dur = len(wav) / float(sr)
 
-    # Transcribe
     print("Transcribing…")
     result = asr(sample, return_timestamps="word")
-    words = normalize_words_from_asr_result(result)
-    words = collapse_nearby_duplicate_words(words)
+    words = collapse_nearby_duplicate_words(normalize_words_from_asr_result(result))
 
-    # Diarization
     print("Running diarization…")
     turns_clean = run_diarization(audio_path)
     bounds = diarization_boundaries(turns_clean)
+    print("Diarization complete.")
 
-    # Per-word attribution
     labeled_words = []
     for w in words:
-        spk = find_label_for_span(w["start"], w["end"], turns_clean, bounds)
+        spk, _ = find_label_for_span(w["start"], w["end"], turns_clean, bounds)
         labeled_words.append({**w, "speaker": spk})
 
-    # Group & clean
-    labeled_words.sort(key=lambda x: (x["start"], x["end"]))
-    segments = group_labeled_words(labeled_words)
-    segments = coalesce_consecutive_same_speaker(segments)
-    for seg in segments:
-        seg["text"] = collapse_adjacent_repeated_ngrams(seg["text"], max_n=6)
-
-    # Write output
+    # Write .txt
     with open(output_path, "w", encoding="utf-8") as f:
-        for seg in segments:
-            final_text = ' '.join(seg['text']).strip()
-            final_text = compact_double_words(final_text)
-            line = f"[{seg['speaker']} {fmt_ts(seg['start'])} - {fmt_ts(seg['end'])}]: {final_text}\n"
-            print(line, end="")
-            f.write(line)
+        segments = []
+        for w in labeled_words:
+            segments.append(f"[{w['speaker']} {fmt_ts(w['start'])} - {fmt_ts(w['end'])}]: {w['text']}")
+        for line in segments:
+            print(line)
+            f.write(line + "\n")
+
+    # Write .json alongside .txt
+    json_path = os.path.splitext(output_path)[0] + ".json"
+    with open(json_path, "w", encoding="utf-8") as jf:
+        json.dump(labeled_words, jf, indent=2)
 
     print(f"\nSpeaker-attributed transcript saved to {output_path}")
 
+# ----------------------------- CLI entrypoint -------------------------------
+
+if __name__ == "__main__":
+    if len(sys.argv) < 3:
+        print("Usage: python diarize_then_transcribe.py <audio_file> <output_file>")
+        sys.exit(1)
+    diarize_then_transcribe(sys.argv[1], sys.argv[2])
