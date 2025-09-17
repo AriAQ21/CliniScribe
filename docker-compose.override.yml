@@ -35,7 +35,7 @@ services:
       - medical-network
 
   # Playwright E2E Tests
-  e2e-tests:
+  integration-tests:
     image: mcr.microsoft.com/playwright:v1.55.0-jammy
     working_dir: /app
     command: >
