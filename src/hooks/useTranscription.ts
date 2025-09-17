@@ -277,6 +277,7 @@ export function useTranscription(
         if (statusData.status === "completed" && statusData.transcript) {
           setTranscriptionText(statusData.transcript);
           setIsProcessing(false);
+          toast({ title: "Transcription Complete", description: "Your audio has been successfully transcribed." });
           return;
         }
         if (statusData.status === "error") {
