@@ -19,6 +19,7 @@ interface DateFilterHeaderProps {
 
 export function DateFilterHeader({ selectedDate, onDateChange, onImportComplete }: DateFilterHeaderProps) {
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
   return (
     <div className="flex items-center justify-between mb-6 p-4 bg-card rounded-lg border">
@@ -26,7 +27,7 @@ export function DateFilterHeader({ selectedDate, onDateChange, onImportComplete 
         <h2 className="text-xl font-semibold text-foreground">Filter by Date:</h2>
         
         {/* Date Picker */}
-        <Popover>
+        <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
           <PopoverTrigger asChild>
             <Button
               variant="outline"
@@ -43,7 +44,12 @@ export function DateFilterHeader({ selectedDate, onDateChange, onImportComplete 
             <Calendar
               mode="single"
               selected={selectedDate}
-              onSelect={(date) => date && onDateChange(date)}
+              onSelect={(date) => {
+                if (date) {
+                  onDateChange(date);
+                  setIsCalendarOpen(false); 
+                }
+              }}
               initialFocus
               className={cn("p-3 pointer-events-auto")}
             />
@@ -69,3 +75,5 @@ export function DateFilterHeader({ selectedDate, onDateChange, onImportComplete 
     </div>
   );
 }
+
+
