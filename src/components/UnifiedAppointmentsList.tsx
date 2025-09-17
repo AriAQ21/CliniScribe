@@ -17,41 +17,22 @@ interface UnifiedAppointmentsListProps {
   selectedDate: Date;
 }
 
-// --- helper: minutes since midnight from common time formats
-function toMinutesSinceMidnight(raw: string): number {
-  if (!raw) return Number.POSITIVE_INFINITY;
-  const s = raw.trim().toUpperCase();
+// parser specifically for "h:mm AM/PM" strings
+function toMinutesSinceMidnight(time: string): number {
+  if (!time) return Number.POSITIVE_INFINITY;
 
-  // 12h formats: "H:MM AM", "H:MM:SS PM", "7PM", "7:15PM"
-  const m12 = s.match(/^(\d{1,2})(?::(\d{2}))?(?::(\d{2}))?\s*(AM|PM)$/i);
-  if (m12) {
-    let h = parseInt(m12[1], 10);
-    const min = parseInt(m12[2] ?? "0", 10);
-    // const sec = parseInt(m12[3] ?? "0", 10); // not used
-    const ampm = m12[4].toUpperCase();
-    if (ampm === "AM") {
-      if (h === 12) h = 0;
-    } else {
-      if (h !== 12) h += 12;
-    }
-    return h * 60 + min;
+  const match = time.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (match) {
+    let hour = parseInt(match[1], 10);
+    const minutes = parseInt(match[2], 10);
+    const ampm = match[3].toUpperCase();
+
+    if (ampm === "AM" && hour === 12) hour = 0;
+    if (ampm === "PM" && hour !== 12) hour += 12;
+
+    return hour * 60 + minutes;
   }
 
-  // 24h formats: "HH:MM", "HH:MM:SS"
-  const m24 = s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
-  if (m24) {
-    const h = parseInt(m24[1], 10);
-    const min = parseInt(m24[2], 10);
-    return h * 60 + min;
-  }
-
-  // Very loose fallback: just try Date parse (last resort)
-  const d = new Date(`1970-01-01T${raw}`);
-  if (!isNaN(d.getTime())) {
-    return d.getHours() * 60 + d.getMinutes();
-  }
-
-  // Unknown format → push to end
   return Number.POSITIVE_INFINITY;
 }
 
@@ -90,26 +71,22 @@ export function UnifiedAppointmentsList({
     return dOnly.getTime() === selectedDateOnly.getTime();
   });
 
-  // Merge then sort by parsed time
-  const sortedAppointments = [...filteredDummy, ...filteredImported].sort((a, b) => {
-    const ma = toMinutesSinceMidnight(a.time);
-    const mb = toMinutesSinceMidnight(b.time);
-    return ma - mb || String(a.id).localeCompare(String(b.id)); // stable tie-breaker
-  });
+  // Merge & sort by parsed AM/PM times
+  const sortedAppointments = [...filteredDummy, ...filteredImported].sort(
+    (a, b) => toMinutesSinceMidnight(a.time) - toMinutesSinceMidnight(b.time)
+  );
 
   if (sortedAppointments.length === 0) {
     return (
       <div className="text-center py-12">
-        <p className="text-muted-foreground text-lg">
-          No appointments found for this date
-        </p>
+        <p className="text-muted-foreground text-lg">No appointments found for this date</p>
         <p className="text-muted-foreground text-sm mt-2">
           Import appointments using the button above to get started
         </p>
       </div>
     );
   }
-
+  
   return (
     <div className="space-y-4">
       <h2 className="text-2xl font-semibold text-foreground">
