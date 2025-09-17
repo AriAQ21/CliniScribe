@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
 import os
 import re
-import argparse
-import string
 from typing import List, Dict, Tuple, Optional
-
-import numpy as np
 import torch
+import numpy as np
 import torchaudio
 from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline as hf_pipeline
 from pyannote.audio import Pipeline as PyannotePipeline
@@ -16,12 +13,6 @@ from pyannote.audio import Pipeline as PyannotePipeline
 def fmt_ts(t: float) -> str:
     m, s = divmod(float(t), 60.0)
     return f"{int(m):02d}:{s:04.1f}"
-
-def rttm_line(uri: str, start: float, end: float, speaker: str) -> str:
-    """Format one RTTM line (SPEAKER). Duration is end-start, clipped ≥ 0."""
-    dur = max(0.0, float(end) - float(start))
-    # SPEAKER <uri> 1 <start> <dur> <NA> <NA> <speaker> <NA> <NA>
-    return f"SPEAKER {uri} 1 {start:.3f} {dur:.3f} <NA> <NA> {speaker} <NA> <NA>\n"
 
 def _norm_token(t: str) -> str:
     # lower + remove punctuation so "today," == "today"
@@ -84,8 +75,8 @@ def load_audio_mono(path: str) -> Tuple[np.ndarray, int]:
 
 def run_diarization(
     audio_path: str,
-    min_turn: float,
-    merge_gap: float,
+    min_turn: float = 0.5,
+    merge_gap: float = 0.3,
     num_speakers: Optional[int] = None,
 ) -> List[Dict]:
     """
@@ -373,115 +364,53 @@ def smooth_unknown_islands(words: List[Dict]) -> List[Dict]:
                 out[i]["speaker"] = left["speaker"]
     return out
 
-# ------------------------------- RTTM writer --------------------------------
+# ------------------------------- Public API ---------------------------------
 
-def write_rttm(rttm_path: str, uri: str, turns_clean_unpadded: List[Dict]) -> None:
-    """
-    Write RTTM using CLEANED (UNPADDED) diarization turns — appropriate for DER.
-    """
-    with open(rttm_path, "w", encoding="utf-8") as f:
-        for seg in turns_clean_unpadded:
-            f.write(rttm_line(uri, seg["start"], seg["end"], seg["speaker"]))
-
-# --------------------------------- Main -------------------------------------
-
-def build_cli():
-    p = argparse.ArgumentParser(description="Pipeline 6: Full-audio Whisper + word-level overlap alignment vs diarization.")
-    p.add_argument("audio_file", help="Path to input audio (wav/mp3/etc.)")
-    p.add_argument("output_file", help="Path to output transcript (.txt). RTTM will be written next to this with .rttm extension.")
-    # Diarization hygiene
-    p.add_argument("--min-turn", type=float, default=0.5, help="Drop diarization turns shorter than this many seconds (default: 0.5).")
-    p.add_argument("--merge-gap", type=float, default=0.3, help="Merge adjacent same-speaker turns when gap <= this (default: 0.3).")
-    p.add_argument("--pad-turn", type=float, default=0.25, help="Pad diarization turns by this many seconds on both sides (default: 0.25).")
-    p.add_argument("--num-speakers", type=int, default=None, help="(Optional) Force number of speakers for diarization.")
-    # Alignment params
-    p.add_argument("--min-overlap", type=float, default=0.06, help="Minimum overlap (sec) to accept a label (default: 0.06).")
-    # Grouping / readability
-    p.add_argument("--max-merge-gap-out", type=float, default=0.6, help="Merge adjacent same-speaker word groups if gap <= this (default: 0.6).")
-    # ASR chunking (full-audio)
-    p.add_argument("--chunk-length", type=int, default=30, help="Whisper chunk length in seconds (default: 30).")
-    p.add_argument("--stride", type=int, default=5, help="Whisper stride in seconds (default: 5).")
-    return p
-
-def main():
-    args = build_cli().parse_args()
-
-    print(">>> Pipeline 6: Full-audio ASR + word-level overlap alignment")
-    print(f"Audio:  {args.audio_file}")
-    print(f"Output: {args.output_file}")
+def diarize_then_transcribe(audio_path: str, output_path: str):
+    print(">>> Pipeline 6: Full-audio ASR + word-level alignment")
+    print(f"Audio path: {audio_path}")
 
     # Device & ASR
     device, dtype, pipe_device = get_device_and_dtype()
-    asr = load_whisper_pipeline(device, dtype, pipe_device, chunk_len=args.chunk_length, stride=args.stride)
+    asr = load_whisper_pipeline(device, dtype, pipe_device)
 
-    # Load audio (mono array for pipeline sample input)
-    wav, sr = load_audio_mono(args.audio_file)
+    # Load audio
+    wav, sr = load_audio_mono(audio_path)
     sample = {"array": wav, "sampling_rate": sr}
     audio_dur = len(wav) / float(sr)
-    uri = os.path.splitext(os.path.basename(args.audio_file))[0]
 
-    # Full-audio ASR with word timestamps (global timeline)
-    print("Transcribing (requesting word-level timestamps)…")
+    # Transcribe
+    print("Transcribing…")
     result = asr(sample, return_timestamps="word")
     words = normalize_words_from_asr_result(result)
-    words = collapse_nearby_duplicate_words(words, max_gap=0.35)
-    print(f"Collected {len(words)} word items")
+    words = collapse_nearby_duplicate_words(words)
 
-    # Diarization hygiene
-    print("Running diarization + hygiene…")
-    turns_clean = run_diarization(args.audio_file, min_turn=args.min_turn, merge_gap=args.merge_gap, num_speakers=args.num_speakers)
-    # Write RTTM from CLEANED (UNPADDED) turns for DER
-    out_base, _ = os.path.splitext(args.output_file)
-    rttm_path = out_base + ".rttm"
-    write_rttm(rttm_path, uri, turns_clean)
-    print(f"RTTM (DER source) written: {rttm_path}  —  segments: {len(turns_clean)}")
-
-    # Pad only for alignment robustness
-    turns_padded = pad_turns(turns_clean, pad=args.pad_turn, max_time=audio_dur)
-    print(f"Cleaned diarization turns (padded for alignment): {len(turns_padded)}")
-    bounds = diarization_boundaries(turns_padded)
+    # Diarization
+    print("Running diarization…")
+    turns_clean = run_diarization(audio_path)
+    bounds = diarization_boundaries(turns_clean)
 
     # Per-word attribution
     labeled_words = []
-    unknown_count = 0
     for w in words:
-        spk, _snapped = find_label_for_span(
-            w["start"], w["end"], turns_padded, bounds, min_overlap=args.min_overlap
-        )
-        if spk == "Unknown":
-            unknown_count += 1
-        labeled_words.append({"start": w["start"], "end": w["end"], "text": w["text"], "speaker": spk})
+        spk = find_label_for_span(w["start"], w["end"], turns_clean, bounds)
+        labeled_words.append({**w, "speaker": spk})
 
-    # Smooth tiny Unknown islands
-    labeled_words = smooth_unknown_islands(labeled_words)
-    unknown_count = sum(1 for w in labeled_words if w["speaker"] == "Unknown")
-    print(f"Labeled words: {len(labeled_words)} (Unknown after smoothing: {unknown_count})")
-
-
-    # Group adjacent words with same speaker for readability
+    # Group & clean
     labeled_words.sort(key=lambda x: (x["start"], x["end"]))
-    segments = group_labeled_words(labeled_words, max_merge_gap_out=args.max_merge_gap_out)
+    segments = group_labeled_words(labeled_words)
     segments = coalesce_consecutive_same_speaker(segments)
     for seg in segments:
         seg["text"] = collapse_adjacent_repeated_ngrams(seg["text"], max_n=6)
 
-
-    # Write human-readable transcript
-    with open(args.output_file, "w", encoding="utf-8") as f:
+    # Write output
+    with open(output_path, "w", encoding="utf-8") as f:
         for seg in segments:
-            if seg["end"] <= seg["start"]:
-                seg["end"] = seg["start"] + 0.01
-
             final_text = ' '.join(seg['text']).strip()
             final_text = compact_double_words(final_text)
             line = f"[{seg['speaker']} {fmt_ts(seg['start'])} - {fmt_ts(seg['end'])}]: {final_text}\n"
-            
-            # line = f"[{seg['speaker']} {fmt_ts(seg['start'])} - {fmt_ts(seg['end'])}]: {' '.join(seg['text']).strip()}\n"
             print(line, end="")
             f.write(line)
 
-    print(f"\nSpeaker-attributed transcript saved to {args.output_file}")
-    print(f"RTTM (for DER) saved to {rttm_path} (from CLEANED, UNPADDED diar turns)")
+    print(f"\nSpeaker-attributed transcript saved to {output_path}")
 
-if __name__ == "__main__":
-    main()
