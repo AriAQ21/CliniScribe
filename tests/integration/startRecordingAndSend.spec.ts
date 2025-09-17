@@ -1,11 +1,13 @@
-// This covers:
-// Login
-// Navigating to appointment
-// Consent check
-// Recording
-// Pausing
-// Sending for transcription
-// Seeing confirmation of transcription
+// --- Step 1: Login
+// --- Step 2: Seed a "Test Appointment" so the dashboard shows it
+// --- Step 3: Go to dashboard
+// --- Step 4: Pick a Test appointment card
+// --- Step 5: Open details
+// --- Step 6: Verify navigation
+// --- Step 7: Mock backend endpoints
+// --- Step 8: Consent + recording flow
+// --- Step 9: Pause + send for transcription
+// --- Step 10: Wait for transcription + verify transcript
 
 
 import { test, expect } from '@playwright/test';
