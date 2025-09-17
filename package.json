@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run --config vitest.config.ts",
-    "test:e2e": "playwright test -c tests/integration/playwright.config.ts"
+    "test:e2e": "playwright test -c tests/integration/playwright.config.ts",
+    "test:frontend": "vitest run --config vitest.config.ts tests/frontend"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
