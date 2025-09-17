@@ -72,8 +72,9 @@ test.describe('Transcription Flow (seeded Test User)', () => {
       });
     });
 
-    // --- Step 6: Consent + recording flow
-    await page.getByLabel(/patient has given consent/i).check();
+    // --- Step 7: Consent + recording flow (use helper)
+    await giveConsent(page);
+
     await page.getByRole('button', { name: /start recording/i }).click();
     await expect(page.getByText(/recording in progress/i)).toBeVisible();
 
@@ -81,8 +82,10 @@ test.describe('Transcription Flow (seeded Test User)', () => {
     await page.getByRole('button', { name: /pause recording/i }).click();
     await page.getByRole('button', { name: /^send for transcription$/i }).click();
 
-    // --- Step 7: Wait for transcription progress + mocked transcript
+    // --- Step 8: Wait for transcription progress + mocked transcript
     await expect(page.getByText(/transcription in progress/i)).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText(transcriptText)).toBeVisible({ timeout: 15_000 });
   });
 });
+
+   
