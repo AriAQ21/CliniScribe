@@ -99,7 +99,7 @@ export async function seedAppointmentDetails(
 ) {
   await page.route(`**/appointments/${id}/details`, async route => {
     const url = route.request().url();
-    // console.log('🧪 Mock intercepted appointment details request:', { url, id });
+    // console.log('Mock intercepted appointment details request:', { url, id });
 
     const body = {
       appointment_id: Number(id),
@@ -111,7 +111,7 @@ export async function seedAppointmentDetails(
       user_id: overrides?.user_id ?? 123,
     };
 
-    // console.log('🧪 Returning appointment details response:', body);
+    // console.log('Returning appointment details response:', body);
 
     await route.fulfill({
       status: 200,
@@ -122,7 +122,7 @@ export async function seedAppointmentDetails(
 
   // Mock transcription endpoints with SUCCESS responses instead of 404s
   await page.route(/.*\/transcribe\/text\/.*/, async route => {
-    // console.log('🧪 Mock intercepted transcribe/text request:', route.request().url());
+    // console.log('Mock intercepted transcribe/text request:', route.request().url());
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -131,7 +131,7 @@ export async function seedAppointmentDetails(
   });
 
   await page.route(/.*\/transcribe\/status\/.*/, async route => {
-    // console.log('🧪 Mock intercepted transcribe/status request:', route.request().url());
+    // console.log('Mock intercepted transcribe/status request:', route.request().url());
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -140,7 +140,7 @@ export async function seedAppointmentDetails(
   });
 
   await page.route(/.*\/transcribe$/, async route => {
-    // console.log('🧪 Mock intercepted transcribe upload request:', route.request().url());
+    // console.log('Mock intercepted transcribe upload request:', route.request().url());
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -150,7 +150,7 @@ export async function seedAppointmentDetails(
 
   // Mock audio recording endpoints with SUCCESS responses
   await page.route(/.*\/audio\/.*/, async route => {
-    // console.log('🧪 Mock intercepted audio request:', route.request().url());
+    // console.log('Mock intercepted audio request:', route.request().url());
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -160,7 +160,7 @@ export async function seedAppointmentDetails(
 
   // Mock microphone/device APIs with realistic device list
   await page.route(/.*\/devices\/.*/, async route => {
-    // console.log('🧪 Mock intercepted device request:', route.request().url());
+    // console.log('Mock intercepted device request:', route.request().url());
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -175,22 +175,22 @@ export async function seedAppointmentDetails(
 
 /** Basic login flow + assert we're on the dashboard */
 export async function login(page: Page) {
-  // console.log('🧪 Starting login flow');
+  // console.log('Starting login flow');
   
   // Setup test environment with comprehensive mocking
   await setupTestEnvironment(page);
   
-  // console.log('🧪 Setting up authentication mock');
+  // console.log('Setting up authentication mock');
   
   // Mock the users table query for authentication with comprehensive logging
   await page.route('**/rest/v1/users*', async route => {
     const url = route.request().url();
     const decodedUrl = decodeURIComponent(url); // Decode URL to handle %40 -> @
     const method = route.request().method();
-    // console.log('🧪 Mock intercepted request:', { method, url, decodedUrl });
+    // console.log('Mock intercepted request:', { method, url, decodedUrl });
     
     if (decodedUrl.includes('email=eq.alice@email.com') && decodedUrl.includes('password=eq.password')) {
-      // console.log('🧪 Handling login request');
+      // console.log('Handling login request');
       // Return user object directly for .single() method (not wrapped in array)
       const response = {
         user_id: 123,
@@ -200,14 +200,14 @@ export async function login(page: Page) {
         location: 'Room 101',
         email: 'alice@email.com'
       };
-      // console.log('🧪 Returning login response:', response);
+      // console.log('Returning login response:', response);
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify(response),
       });
     } else if (url.includes('user_id=eq.123')) {
-      // console.log('🧪 Handling session restore request');
+      // console.log('Handling session restore request');
       // Mock user lookup by ID for session restoration (useAuth checkAuth)
       const response = {
         user_id: 123,
@@ -217,14 +217,14 @@ export async function login(page: Page) {
         location: 'Room 101',
         email: 'alice@email.com'
       };
-      // console.log('🧪 Returning session restore response:', response);
+      // console.log('Returning session restore response:', response);
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify(response),
       });
     } else {
-      // console.log('🧪 Unhandled users request, returning empty array');
+      // console.log('Unhandled users request, returning empty array');
       // Return empty array for invalid credentials or other queries
       await route.fulfill({ 
         status: 200, 
@@ -234,31 +234,31 @@ export async function login(page: Page) {
     }
   });
 
-  // console.log('🧪 Starting login flow');
+  // console.log('Starting login flow');
   // Navigate to auth page and perform login
   await page.goto('/auth');
   
-  // console.log('🧪 Waiting for form elements');
+  // console.log('Waiting for form elements');
   // Wait for the form to be visible before interacting
   await page.waitForSelector('input[type="email"]', { timeout: 10000 });
   
-  // console.log('🧪 Filling in credentials');
+  // console.log('Filling in credentials');
   await page.fill('input[type="email"]', 'alice@email.com');
   await page.fill('input[type="password"]', 'password');
   
-  // console.log('🧪 Clicking sign in button');
+  // console.log('Clicking sign in button');
   await page.getByRole('button', { name: /sign in|log in/i }).click();
   
   // Add a small delay to ensure state updates
   await page.waitForTimeout(200);
-  // console.log('🧪 Login form submitted, waiting for navigation');
+  // console.log('Login form submitted, waiting for navigation');
   
   // Wait for successful redirect to dashboard
-  // console.log('🧪 Waiting for URL to change to dashboard...');
+  // console.log('Waiting for URL to change to dashboard...');
   await page.waitForURL('**/dashboard', { timeout: 15000 });
-  // console.log('🧪 URL changed to dashboard, checking dashboard elements');
+  // console.log('URL changed to dashboard, checking dashboard elements');
   await expectOnDashboard(page);
-  // console.log('🧪 Login flow completed successfully');
+  // console.log('Login flow completed successfully');
 }
 
 /** Assert we landed on the dashboard (robust markers) */
@@ -314,7 +314,7 @@ export async function expectOnDashboard(page: Page) {
 
 /** Assert that we're on some "details" page of the appointment system. */
 export async function expectOnDetails(page: Page) {
-  // console.log('🧪 expectOnDetails: Starting to check for detail page elements');
+  // console.log('expectOnDetails: Starting to check for detail page elements');
   
   // Enhanced console error capture
   const consoleLogs: string[] = [];
@@ -323,13 +323,13 @@ export async function expectOnDetails(page: Page) {
   page.on('console', msg => {
     if (msg.type() === 'error') {
       consoleLogs.push(msg.text());
-      // console.log('🧪 Console Error:', msg.text());
+      // console.log('Console Error:', msg.text());
     }
   });
   
   page.on('pageerror', error => {
     jsErrors.push(error);
-    // console.log('🧪 JavaScript Error:', error.message, error.stack);
+    // console.log('JavaScript Error:', error.message, error.stack);
   });
 
   // Check for captured test errors
@@ -342,10 +342,10 @@ export async function expectOnDetails(page: Page) {
   });
 
   if (testErrors.length > 0) {
-    // console.log('🧪 expectOnDetails: Captured test errors:', testErrors);
+    // console.log('expectOnDetails: Captured test errors:', testErrors);
   }
   if (testWarnings.length > 0) {
-    // console.log('🧪 expectOnDetails: Captured test warnings:', testWarnings);
+    // console.log('expectOnDetails: Captured test warnings:', testWarnings);
   }
   
   // Wait for network and content
@@ -354,19 +354,19 @@ export async function expectOnDetails(page: Page) {
   
   // Log console errors if any
   if (consoleLogs.length > 0) {
-    // console.log('🧪 expectOnDetails: Console errors found:', consoleLogs);
+    // console.log(' expectOnDetails: Console errors found:', consoleLogs);
   }
   if (jsErrors.length > 0) {
-    // console.log('🧪 expectOnDetails: JavaScript errors found:', jsErrors.map(e => e.message));
+    // console.log('expectOnDetails: JavaScript errors found:', jsErrors.map(e => e.message));
   }
   
   // Log what's actually on the page
   const bodyText = await page.textContent('body');
-  // console.log('🧪 expectOnDetails: Full page text:', bodyText?.substring(0, 500) + '...');
+  // console.log('expectOnDetails: Full page text:', bodyText?.substring(0, 500) + '...');
   
   // Log page HTML for debugging
   const html = await page.content();
-  // console.log('🧪 expectOnDetails: Page HTML:', html.substring(0, 1000) + '...');
+  // console.log('expectOnDetails: Page HTML:', html.substring(0, 1000) + '...');
 
   // Try finding several candidates that match what AppointmentDetail.tsx actually renders
   const candidates = [
@@ -397,34 +397,34 @@ export async function expectOnDetails(page: Page) {
     page.getByRole('button', { name: /back to dashboard/i }),
   ];
 
-  // console.log('🧪 expectOnDetails: Checking', candidates.length, 'candidates');
+  // console.log('expectOnDetails: Checking', candidates.length, 'candidates');
 
   for (let i = 0; i < candidates.length; i++) {
     const candidate = candidates[i];
     try {
       const count = await candidate.count();
       const isVisible = count > 0 ? await candidate.first().isVisible() : false;
-      // console.log(`🧪 expectOnDetails: Candidate ${i}: count=${count}, visible=${isVisible}`);
+      // console.log(`expectOnDetails: Candidate ${i}: count=${count}, visible=${isVisible}`);
       
       if (count > 0 && isVisible) {
-        // console.log('🧪 expectOnDetails: Found valid element, test passes');
+        // console.log('expectOnDetails: Found valid element, test passes');
         return; // Found at least one, we're good
       }
     } catch (error) {
-      // console.log(`🧪 expectOnDetails: Error checking candidate ${i}:`, error);
+      // console.log(`expectOnDetails: Error checking candidate ${i}:`, error);
     }
   }
 
   // If we get here, no elements were found - log more debug info
-  // console.log('🧪 expectOnDetails: No elements found, checking URL and page state');
-  // console.log('🧪 expectOnDetails: Current URL:', page.url());
+  // console.log('expectOnDetails: No elements found, checking URL and page state');
+  // console.log('expectOnDetails: Current URL:', page.url());
   
   // Check if we're showing an error state
   const errorHeading = await page.getByRole('heading', { name: /appointment not found/i }).count();
   const loadingText = await page.getByText(/loading appointment details/i).count();
   
-  // console.log('🧪 expectOnDetails: Error heading count:', errorHeading);
-  // console.log('🧪 expectOnDetails: Loading text count:', loadingText);
+  // console.log('expectOnDetails: Error heading count:', errorHeading);
+  // console.log('expectOnDetails: Loading text count:', loadingText);
 
   throw new Error('No detail page markers found');
 }
@@ -457,39 +457,84 @@ export async function openAnyAppointment(page: Page) {
   throw new Error('No appointment details control/link found on the dashboard.');
 }
 
-/** Toggle consent checkbox in AppointmentDetail */
+/**
+ * Toggle consent in a UI-agnostic way.
+ * Works with shadcn/ui <Checkbox role="checkbox" aria-checked="..."> + label,
+ * and gracefully falls back to several selectors.
+ */
 export async function giveConsent(page: Page) {
-  // 1) Try role=checkbox with accessible name
-  const checkbox = page.getByRole('checkbox', { name: /patient has given consent/i });
-  if (await checkbox.count()) {
-    await checkbox.first().click({ force: true });
-    return;
+  // console.log('giveConsent: Starting consent detection');
+  
+  // Wait for page to be loaded and stable
+  await page.waitForLoadState('networkidle');
+  await page.waitForTimeout(1000);
+  
+  // console.log('giveConsent: Looking for consent elements...');
+  
+  // 1) Try the accessible checkbox first - most reliable
+  // console.log('giveConsent: Trying role checkbox with consent name');
+  const cb = page.getByRole('checkbox', { name: /consent|patient has given consent/i });
+  if (await cb.count()) {
+    try {
+      await cb.waitFor({ state: 'visible', timeout: 10000 });
+      const state = await cb.getAttribute('aria-checked');
+      // console.log('giveConsent: Found consent checkbox, current state:', state);
+      if (state !== 'true') {
+        await cb.click({ force: true });
+        // console.log('giveConsent: Successfully clicked consent checkbox');
+      }
+      return;
+    } catch (error) {
+      // console.log('giveConsent: Role checkbox failed:', error);
+    }
   }
 
-  // 2) Try by ID
+  // 2) Try by direct ID #consent
+  // console.log('giveConsent: Trying by ID #consent');
   const byId = page.locator('#consent').first();
-  if (await byId.count()) {
-    await byId.click({ force: true });
+  await byId.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {});
+  if ((await byId.count()) > 0) {
+    const isVisible = await byId.isVisible();
+    // console.log('giveConsent: #consent element found, visible:', isVisible);
+    if (isVisible) {
+      await byId.click({ force: true });
+      // console.log('giveConsent: Successfully clicked #consent');
+      return;
+    }
+  }
+
+  // 3) Try the label linked via htmlFor="consent"
+  // console.log('giveConsent: Trying label[for="consent"]');
+  const labelFor = page.locator('label[for="consent"]').first();
+  if ((await labelFor.count()) && (await labelFor.isVisible().catch(() => false))) {
+    await labelFor.click({ force: true });
+    // console.log('giveConsent: Successfully clicked label[for="consent"]');
     return;
   }
 
-  // 3) Try clicking the label
-  const label = page.locator('label[for="consent"]').first();
-  if (await label.count()) {
-    await label.click({ force: true });
+  // 4) Try by label text
+  // console.log('giveConsent: Trying by label text');
+  const labelText = page.getByText(/patient has given consent for recording/i).first();
+  if ((await labelText.count()) && (await labelText.isVisible().catch(() => false))) {
+    await labelText.click({ force: true });
+    // console.log('giveConsent: Successfully clicked label text');
+    return;
+  }
+  
+  // 5) Try any checkbox as fallback
+  // console.log('giveConsent: Trying any input[type="checkbox"]');
+  const anyCheckbox = page.locator('input[type="checkbox"]').first();
+  if ((await anyCheckbox.count()) && (await anyCheckbox.isVisible().catch(() => false))) {
+    await anyCheckbox.click({ force: true });
+    // console.log('giveConsent: Successfully clicked any checkbox');
     return;
   }
 
-  // 4) Fallback: any visible checkbox
-  const any = page.locator('input[type="checkbox"]').first();
-  if (await any.count()) {
-    await any.click({ force: true });
-    return;
-  }
-
-  throw new Error('Consent checkbox not found');
+  // Final debug: show what's available
+  const pageContent = await page.textContent('body');
+  // console.log('giveConsent: Available text content snippet:', pageContent?.substring(0, 500));
+  throw new Error('Consent control not found - no checkbox elements were visible');
 }
-
 
 /** Handy wait for any inline message containing some text */
 export async function waitForAnyText(page: Page, re: RegExp, timeout = 15000) {
