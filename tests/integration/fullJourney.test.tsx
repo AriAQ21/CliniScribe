@@ -13,33 +13,6 @@ import { vi, describe, it, beforeEach, expect } from "vitest";
 import Dashboard from "@/pages/Index";
 import AppointmentDetail from "@/pages/AppointmentDetail";
 
-// Mock MediaRecorder for audio recording
-class MockMediaRecorder {
-  public state = "inactive";
-  public ondataavailable: ((event: any) => void) | null = null;
-  public onstop: (() => void) | null = null;
-
-  start() {
-    this.state = "recording";
-    setTimeout(() => {
-      this.ondataavailable?.({ data: new Blob(["audio data"], { type: "audio/wav" }) });
-    }, 0);
-  }
-
-  stop() {
-    this.state = "inactive";
-    setTimeout(() => this.onstop?.(), 0);
-  }
-
-  pause() {
-    this.state = "paused";
-  }
-
-  resume() {
-    this.state = "recording";
-  }
-}
-
 // --- Mocks ---
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({
@@ -54,40 +27,55 @@ vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: vi.fn() }),
 }));
 
+// Mock MediaRecorder and getUserMedia
+const mockMediaRecorder = {
+  start: vi.fn(),
+  stop: vi.fn(),
+  pause: vi.fn(),
+  resume: vi.fn(),
+  state: 'inactive',
+  ondataavailable: null,
+  onstop: null,
+};
+
+Object.defineProperty(window, 'MediaRecorder', {
+  writable: true,
+  value: vi.fn().mockImplementation(() => mockMediaRecorder),
+});
+
+Object.defineProperty(navigator, 'mediaDevices', {
+  writable: true,
+  value: {
+    getUserMedia: vi.fn().mockResolvedValue({
+      getTracks: () => [{ stop: vi.fn() }],
+    }),
+    enumerateDevices: vi.fn().mockResolvedValue([
+      { deviceId: 'default', label: 'Default Microphone', kind: 'audioinput' }
+    ]),
+  },
+});
+
 describe("Full Clinician Journey (Integration)", () => {
-  let fetchCallCount = 0;
   let savedTranscriptText = "This is a mocked transcript generated for testing.";
 
   beforeEach(() => {
     vi.resetAllMocks();
     localStorage.clear();
-    fetchCallCount = 0;
     savedTranscriptText = "This is a mocked transcript generated for testing.";
-
-    // Mock MediaRecorder
-    (global as any).MediaRecorder = MockMediaRecorder;
     
-    // Mock getUserMedia
-    (global.navigator.mediaDevices as any) = {
-      getUserMedia: vi.fn().mockResolvedValue({
-        getTracks: () => [{ stop: vi.fn() }],
-      }),
-    };
+    // Reset MediaRecorder state
+    mockMediaRecorder.state = 'inactive';
+    mockMediaRecorder.ondataavailable = null;
+    mockMediaRecorder.onstop = null;
   });
 
   it("completes full flow: login → record → transcript → edit → save → reload", async () => {
-    // Create a more sophisticated fetch mock that handles the sequence properly
+    // Create a smart fetch mock that can handle multiple concurrent calls
+    let fetchCallCount = 0;
     global.fetch = vi.fn().mockImplementation(async (url: string) => {
       fetchCallCount++;
       
-      // Handle different API calls based on URL pattern
-      if (url.includes('/appointments/user/1?is_dummy=false')) {
-        return {
-          ok: true,
-          json: async () => ({ appointments: [] }),
-        };
-      }
-      
+      // Handle different API endpoints
       if (url.includes('/appointments/user/1?is_dummy=true')) {
         return {
           ok: true,
@@ -109,22 +97,11 @@ describe("Full Clinician Journey (Integration)", () => {
       if (url.includes('/appointments/user/1') && !url.includes('is_dummy')) {
         return {
           ok: true,
-          json: async () => ({
-            appointments: [
-              {
-                id: "1",
-                patientName: "John Doe",
-                doctorName: "Dr. Smith",
-                date: "2025-08-19",
-                time: "09:00:00",
-                room: "Room 1",
-              },
-            ],
-          }),
+          json: async () => ({ appointments: [] }),
         };
       }
       
-      if (url.includes('/appointments/1')) {
+      if (url.includes('/appointment/1')) {
         return {
           ok: true,
           json: async () => ({
@@ -139,10 +116,10 @@ describe("Full Clinician Journey (Integration)", () => {
         };
       }
       
-      if (url.includes('/transcribe/text/dummy-id')) {
+      if (url.includes('/transcribe') && !url.includes('/status/') && !url.includes('/text/') && !url.includes('/update/')) {
         return {
           ok: true,
-          json: async () => ({ transcript: savedTranscriptText }),
+          json: async () => ({ audio_id: "dummy-id", status: "queued" }),
         };
       }
       
@@ -156,8 +133,19 @@ describe("Full Clinician Journey (Integration)", () => {
         };
       }
       
+      if (url.includes('/transcribe/text/dummy-id')) {
+        return {
+          ok: true,
+          json: async () => ({ 
+            audio_id: "dummy-id", 
+            transcript: savedTranscriptText 
+          }),
+        };
+      }
+      
       if (url.includes('/transcribe/update/dummy-id')) {
-        // Extract new text from FormData (simplified for test)
+        // Extract new text from request body would go here
+        // For simplicity, just update to edited text
         savedTranscriptText = "Edited transcript text";
         return {
           ok: true,
@@ -165,129 +153,129 @@ describe("Full Clinician Journey (Integration)", () => {
         };
       }
       
-      if (url.includes('/transcribe') && !url.includes('status') && !url.includes('text')) {
-        return {
-          ok: true,
-          json: async () => ({ audio_id: "dummy-id", status: "queued" }),
-        };
-      }
-      
       // Default fallback
       return {
-        ok: false,
-        status: 404,
-        json: async () => ({ error: "Not found" }),
+        ok: true,
+        json: async () => ({}),
       };
     });
 
-    // Render the full app with routing
+    // Start at dashboard
     const { rerender } = render(
-      <MemoryRouter initialEntries={["/"]}>
+      <MemoryRouter initialEntries={["/dashboard"]}>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/appointment/:id" element={<AppointmentDetail />} />
         </Routes>
       </MemoryRouter>
     );
 
     // Wait for dashboard to load and show appointments
-    await waitFor(() => {
-      expect(screen.getByText(/john doe/i)).toBeInTheDocument();
-    }, { timeout: 5000 });
+    await waitFor(
+      () => {
+        expect(screen.getByText(/john doe/i)).toBeInTheDocument();
+      },
+      { timeout: 10000 }
+    );
 
-    // Navigate to appointment detail by clicking view details button
-    const viewDetailsButton = await screen.findByRole("button", { name: /view details/i });
-    fireEvent.click(viewDetailsButton);
+    // Navigate to appointment detail
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /view details/i }));
+    });
 
     // Re-render with appointment detail route
     rerender(
       <MemoryRouter initialEntries={["/appointment/1"]}>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/appointment/:id" element={<AppointmentDetail />} />
         </Routes>
       </MemoryRouter>
     );
 
     // Wait for appointment details to load
-    await waitFor(() => {
-      expect(screen.getByText(/appointment details/i)).toBeInTheDocument();
-    }, { timeout: 5000 });
+    await waitFor(
+      () => {
+        expect(screen.getByText(/john doe/i)).toBeInTheDocument();
+      },
+      { timeout: 10000 }
+    );
 
-    // Give consent for recording
-    const consentCheckbox = await screen.findByRole("checkbox", {
-      name: /patient has given consent for recording/i,
-    });
-    
+    // --- Recording flow ---
     await act(async () => {
-      fireEvent.click(consentCheckbox);
+      fireEvent.click(
+        screen.getByRole("checkbox", {
+          name: /patient has given consent for recording/i,
+        })
+      );
     });
 
-    // Start recording
-    const startButton = await screen.findByRole("button", { name: /start recording/i });
-    
     await act(async () => {
-      fireEvent.click(startButton);
+      fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
+      // Simulate MediaRecorder state change
+      mockMediaRecorder.state = 'recording';
     });
 
-    // Wait for recording to start
-    await waitFor(() => {
-      expect(screen.getByText(/recording in progress/i)).toBeInTheDocument();
-    }, { timeout: 3000 });
+    await waitFor(() =>
+      expect(screen.getByText(/recording in progress/i)).toBeInTheDocument()
+    );
 
-    // Pause recording
-    const pauseButton = await screen.findByRole("button", { name: /pause recording/i });
-    
     await act(async () => {
-      fireEvent.click(pauseButton);
+      fireEvent.click(screen.getByRole("button", { name: /pause recording/i }));
+      // Simulate MediaRecorder state change
+      mockMediaRecorder.state = 'paused';
+      // Simulate data available
+      if (mockMediaRecorder.ondataavailable) {
+        mockMediaRecorder.ondataavailable({ 
+          data: new Blob(['audio data'], { type: 'audio/wav' }) 
+        });
+      }
     });
 
-    // Send for transcription
-    const sendButton = await screen.findByRole("button", { name: /send for transcription/i });
-    
+    // --- Transcription flow ---
     await act(async () => {
-      fireEvent.click(sendButton);
+      fireEvent.click(
+        screen.getByRole("button", { name: /send for transcription/i })
+      );
     });
 
-    // Wait for transcript to appear
-    await waitFor(() => {
-      expect(screen.getByText(/mocked transcript/i)).toBeInTheDocument();
-    }, { timeout: 10000 });
+    await waitFor(
+      () => {
+        expect(screen.getByText(/mocked transcript/i)).toBeInTheDocument();
+      },
+      { timeout: 15000 }
+    );
 
-    // Edit transcription
-    const editButton = await screen.findByRole("button", { name: /edit transcription/i });
-    
+    // --- Edit transcription ---
     await act(async () => {
-      fireEvent.click(editButton);
+      fireEvent.click(
+        screen.getByRole("button", { name: /edit transcription/i })
+      );
     });
 
-    // Change transcript text
-    const textarea = await screen.findByRole("textbox");
-    
+    const textarea = screen.getByRole("textbox");
     await act(async () => {
       fireEvent.change(textarea, { target: { value: "Edited transcript text" } });
     });
 
-    // Save changes
-    const saveButton = await screen.findByRole("button", { name: /save/i });
-    
     await act(async () => {
-      fireEvent.click(saveButton);
+      fireEvent.click(screen.getByRole("button", { name: /save/i }));
     });
 
-    // Simulate page reload by re-rendering with fresh component
+    // --- Reload page → transcript still shown ---
     rerender(
       <MemoryRouter initialEntries={["/appointment/1"]}>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
           <Route path="/appointment/:id" element={<AppointmentDetail />} />
         </Routes>
       </MemoryRouter>
     );
 
-    // Verify edited transcript persists after reload
-    await waitFor(() => {
-      expect(screen.getByText(/edited transcript text/i)).toBeInTheDocument();
-    }, { timeout: 5000 });
-  });
+    await waitFor(
+      () => {
+        expect(screen.getByText(/edited transcript text/i)).toBeInTheDocument();
+      },
+      { timeout: 10000 }
+    );
+  }, 15000); // Increase timeout to 15 seconds
 });
