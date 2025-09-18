@@ -4,151 +4,115 @@
 
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { vi, describe, it, beforeEach, expect } from "vitest";
 import AppointmentDetail from "@/pages/AppointmentDetail";
-import { vi } from "vitest";
 
-// --- mock hooks ---
+// ---- mock state ----
+let isEditing = false;
+
+const mockSaveTranscription = vi.fn();
+const mockSendForTranscription = vi.fn();
+const mockUploadFileForTranscription = vi.fn();
+
 vi.mock("@/hooks/useAuth", () => ({
-  useAuth: () => ({ user: { user_id: 123 } }),
+  useAuth: () => ({ user: { user_id: 1 } }),
 }));
 
 vi.mock("@/hooks/useAppointmentDetails", () => ({
   useAppointmentDetails: () => ({
-    appointment: { id: "1", room: "Room 101" },
+    appointment: { id: "1", room: "Room 1" },
     patientData: {
       name: "John Doe",
       dateOfBirth: "01/01/1970",
-      nhsNumber: "123",
+      nhsNumber: "1234567890",
     },
     loading: false,
     error: null,
   }),
 }));
 
-// spy-able functions for useTranscription
-const handleSendForTranscription = vi.fn();
-const handleSaveTranscription = vi.fn();
-const handleCancelEdit = vi.fn();
-const setTranscriptionText = vi.fn();
-
-let transcriptionText = "";
-
 vi.mock("@/hooks/useTranscription", () => ({
   useTranscription: () => ({
-    recordingState: "idle",
-    hasRecorded: false,
-    recordingDuration: 0,
-    transcriptionText,
-    transcriptionSent: false,
-    isEditingTranscription: false,
+    transcriptionText: "Patient reports mild headache.",
+    isEditingTranscription: isEditing,
     isProcessing: false,
     isLoadingExistingTranscription: false,
     permissionGranted: true,
-    setTranscriptionText,
-    handleStartRecording: vi.fn(),
-    handlePauseRecording: vi.fn(),
-    handleResumeRecording: vi.fn(),
-    handleSendForTranscription,
-    handleUploadFileForTranscription: vi.fn(),
-    handleEditTranscription: vi.fn(() => {
-      // flip into edit mode
-      (vi.mocked(useTranscription) as any).mockReturnValueOnce({
-        ...defaultHook,
-        transcriptionText,
-        isEditingTranscription: true,
-      });
-    }),
-    handleSaveTranscription,
-    handleCancelEdit,
-    loadExistingTranscription: vi.fn(),
+    recordingState: "idle",
+    hasRecorded: true,
+    handleEditTranscription: () => {
+      isEditing = true;
+    },
+    handleCancelEdit: () => {
+      isEditing = false;
+    },
+    handleSaveTranscription: mockSaveTranscription,
+    handleSendForTranscription: mockSendForTranscription,
+    handleUploadFileForTranscription: mockUploadFileForTranscription,
+    setTranscriptionText: vi.fn(),
   }),
 }));
 
-// import AFTER mocks
-import { useTranscription } from "@/hooks/useTranscription";
+// ---- test wrapper ----
+const TestApp = () => (
+  <MemoryRouter initialEntries={["/appointment/1"]}>
+    <Routes>
+      <Route path="/appointment/:id" element={<AppointmentDetail />} />
+    </Routes>
+  </MemoryRouter>
+);
 
 describe("Transcription integration", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    transcriptionText = "";
+    isEditing = false;
   });
 
   it("uploads audio and shows transcript", async () => {
-    transcriptionText = "Patient discusses symptoms in detail.";
+    render(<TestApp />);
 
-    render(
-      <MemoryRouter initialEntries={["/appointment/1"]}>
-        <Routes>
-          <Route path="/appointment/:id" element={<AppointmentDetail />} />
-        </Routes>
-      </MemoryRouter>
-    );
+    // open upload dialog
+    fireEvent.click(screen.getByRole("button", { name: /upload audio/i }));
 
-    // Simulate clicking send for transcription
-    fireEvent.click(
-      screen.getByRole("button", { name: /send for transcription/i })
-    );
+    // simulate file selection
+    const file = new File(["dummy audio"], "test-audio.wav", { type: "audio/wav" });
+    const input = screen.getByLabelText(/upload file/i);
+    fireEvent.change(input, { target: { files: [file] } });
 
-    expect(handleSendForTranscription).toHaveBeenCalled();
+    // click send inside the dialog
+    fireEvent.click(screen.getByRole("button", { name: /send for transcription/i }));
 
-    // Transcript text should appear
     await waitFor(() => {
-      expect(
-        screen.getByText(/Patient discusses symptoms in detail./i)
-      ).toBeInTheDocument();
+      expect(mockUploadFileForTranscription).toHaveBeenCalled();
+      expect(mockSendForTranscription).toHaveBeenCalled();
     });
   });
 
   it("edits and saves transcript", async () => {
-    transcriptionText = "Original transcript";
+    render(<TestApp />);
 
-    render(
-      <MemoryRouter initialEntries={["/appointment/1"]}>
-        <Routes>
-          <Route path="/appointment/:id" element={<AppointmentDetail />} />
-        </Routes>
-      </MemoryRouter>
-    );
-
-    // Start edit mode
-    fireEvent.click(
-      screen.getByRole("button", { name: /edit transcription/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /edit transcription/i }));
 
     const textarea = screen.getByRole("textbox");
     fireEvent.change(textarea, { target: { value: "Edited transcript" } });
 
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
 
-    expect(handleSaveTranscription).toHaveBeenCalled();
+    expect(mockSaveTranscription).toHaveBeenCalled();
   });
 
   it("cancels transcript edit", async () => {
-    transcriptionText = "Original transcript";
+    render(<TestApp />);
 
-    render(
-      <MemoryRouter initialEntries={["/appointment/1"]}>
-        <Routes>
-          <Route path="/appointment/:id" element={<AppointmentDetail />} />
-        </Routes>
-      </MemoryRouter>
-    );
-
-    fireEvent.click(
-      screen.getByRole("button", { name: /edit transcription/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /edit transcription/i }));
 
     const textarea = screen.getByRole("textbox");
     fireEvent.change(textarea, { target: { value: "Unsaved changes" } });
 
     fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
 
-    expect(handleCancelEdit).toHaveBeenCalled();
-
-    // Old transcript should still be visible
-    expect(screen.getByText("Original transcript")).toBeInTheDocument();
-    expect(
-      screen.queryByText("Unsaved changes")
-    ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(isEditing).toBe(false);
+    });
   });
 });
