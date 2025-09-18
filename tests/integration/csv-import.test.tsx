@@ -5,7 +5,7 @@
 
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi } from "vitest";
-import CSVImportDialog from "@/components/CSVImportDialog"; // adjust path
+import AppointmentImportDialog from "@/components/AppointmentImportDialog";
 
 // Mock useImportedAppointments
 const mockImportAppointments = vi.fn();
@@ -20,7 +20,7 @@ vi.mock("@/hooks/useImportedAppointments", () => ({
   }),
 }));
 
-describe("CSV/Excel Import (integration)", () => {
+describe("Appointment Import Dialog (integration)", () => {
   beforeEach(() => {
     vi.resetAllMocks();
   });
@@ -31,13 +31,19 @@ describe("CSV/Excel Import (integration)", () => {
       message: "Import completed successfully",
     });
 
-    render(<CSVImportDialog onImportComplete={vi.fn()} />);
+    render(<AppointmentImportDialog onImportComplete={vi.fn()} />);
 
-    const file = new File(["Patient Name,Date,Time\nJohn Doe,2025-08-19,09:00"], "appointments.csv", { type: "text/csv" });
+    const file = new File(
+      ["Patient Name,Date,Time\nJohn Doe,2025-08-19,09:00"],
+      "appointments.csv",
+      { type: "text/csv" }
+    );
     const input = screen.getByLabelText(/upload/i);
     fireEvent.change(input, { target: { files: [file] } });
 
-    fireEvent.click(screen.getByRole("button", { name: /import appointments/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /import appointments/i })
+    );
 
     await waitFor(() => {
       expect(mockImportAppointments).toHaveBeenCalledTimes(1);
@@ -50,19 +56,27 @@ describe("CSV/Excel Import (integration)", () => {
       message: "Invalid date format",
     });
 
-    render(<CSVImportDialog onImportComplete={vi.fn()} />);
+    render(<AppointmentImportDialog onImportComplete={vi.fn()} />);
 
-    const file = new File(["Patient Name,Date,Time\nJohn Doe,32/13/2025,09:00"], "invalid.csv", { type: "text/csv" });
+    const file = new File(
+      ["Patient Name,Date,Time\nJohn Doe,32/13/2025,09:00"],
+      "invalid.csv",
+      { type: "text/csv" }
+    );
     const input = screen.getByLabelText(/upload/i);
     fireEvent.change(input, { target: { files: [file] } });
 
-    fireEvent.click(screen.getByRole("button", { name: /import appointments/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /import appointments/i })
+    );
 
     await waitFor(() => {
       expect(mockImportAppointments).toHaveBeenCalledTimes(1);
-      // Instead of DOM, assert the return value
       expect(mockImportAppointments).toHaveReturnedWith(
-        expect.objectContaining({ success: false, message: "Invalid date format" })
+        expect.objectContaining({
+          success: false,
+          message: "Invalid date format",
+        })
       );
     });
   });
@@ -73,20 +87,30 @@ describe("CSV/Excel Import (integration)", () => {
       message: "Duplicate appointments detected",
     });
 
-    render(<CSVImportDialog onImportComplete={vi.fn()} />);
+    render(<AppointmentImportDialog onImportComplete={vi.fn()} />);
 
-    const file = new File(["Patient Name,Date,Time\nJohn Doe,2025-08-19,09:00\nJohn Doe,2025-08-19,09:00"], "dupes.csv", { type: "text/csv" });
+    const file = new File(
+      [
+        "Patient Name,Date,Time\nJohn Doe,2025-08-19,09:00\nJohn Doe,2025-08-19,09:00",
+      ],
+      "dupes.csv",
+      { type: "text/csv" }
+    );
     const input = screen.getByLabelText(/upload/i);
     fireEvent.change(input, { target: { files: [file] } });
 
-    fireEvent.click(screen.getByRole("button", { name: /import appointments/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /import appointments/i })
+    );
 
     await waitFor(() => {
       expect(mockImportAppointments).toHaveBeenCalledTimes(1);
       expect(mockImportAppointments).toHaveReturnedWith(
-        expect.objectContaining({ success: false, message: "Duplicate appointments detected" })
+        expect.objectContaining({
+          success: false,
+          message: "Duplicate appointments detected",
+        })
       );
     });
   });
 });
-
