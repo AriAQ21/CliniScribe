@@ -1,32 +1,20 @@
 // tests/integration/fullJourney.test.tsx
-import { vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "@/App";
 
-// ✅ Polyfills just for THIS test suite
+// Polyfill matchMedia for JSDOM (used by sonner)
 beforeAll(() => {
-  if (!window.matchMedia) {
-    Object.defineProperty(window, "matchMedia", {
-      writable: true,
-      value: vi.fn().mockImplementation(query => ({
-        matches: false,
-        media: query,
-        onchange: null,
-        addListener: vi.fn(),    // deprecated
-        removeListener: vi.fn(), // deprecated
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-        dispatchEvent: vi.fn(),
-      })),
-    });
-  }
-
-  if (!globalThis.fetch) {
-    globalThis.fetch = vi.fn(() =>
-      Promise.reject(new Error("fetch not mocked in fullJourney.test"))
-    ) as any;
-  }
+  window.matchMedia = vi.fn().mockImplementation((query) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(), // deprecated
+    removeListener: vi.fn(), // deprecated
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
 });
 
 // Reset router path before each test
@@ -43,18 +31,29 @@ vi.mock("@/hooks/useAuth", () => ({
   }),
 }));
 
-// You may also need to mock appointments if your App calls useDummyAppointments
+// ✅ Fix: correct shape for dummy appointments
 vi.mock("@/hooks/useDummyAppointments", () => ({
   useDummyAppointments: () => ({
-    data: [
+    appointments: [
       {
-        id: 1,
+        id: "1",
         patientName: "John Doe",
-        time: "09:00",
+        doctorName: "Dr Smith",
         room: "Room 1",
+        date: new Date().toISOString().split("T")[0], // always today
+        time: "09:00 AM",
       },
     ],
-    isLoading: false,
+    loading: false,
+    error: null,
+  }),
+}));
+
+// If you also need imported appointments mocked:
+vi.mock("@/hooks/useImportedAppointments", () => ({
+  useImportedAppointments: () => ({
+    appointments: [],
+    loading: false,
     error: null,
   }),
 }));
@@ -68,7 +67,7 @@ describe("Full Clinician Journey (Integration)", () => {
       expect(screen.getByText(/john doe/i)).toBeInTheDocument();
     });
 
-    // Step 2: Click "View Details" for appointment
+    // Step 2: Click "View Details" for the appointment
     const viewDetailsButton = screen.getByRole("button", {
       name: /view details/i,
     });
@@ -115,6 +114,7 @@ describe("Full Clinician Journey (Integration)", () => {
 
     // Step 8: Reload & verify saved transcript
     render(<App />);
+
     await waitFor(() => {
       expect(screen.getByText(/edited/i)).toBeInTheDocument();
     });
