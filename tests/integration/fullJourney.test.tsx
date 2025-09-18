@@ -33,14 +33,21 @@ describe("Full Clinician Journey (Integration)", () => {
   });
 
   it("completes full flow: login → record → transcript → edit → save → reload", async () => {
-    // Mock /appointments/user → seed dashboard
+    // Mock API responses for the full journey
     global.fetch = vi.fn()
       // Dashboard appointments
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           appointments: [
-            { id: "1", patientName: "John Doe", doctorName: "Dr. Smith", date: "2025-08-19", time: "09:00", room: "Room 1" },
+            {
+              id: "1",
+              patientName: "John Doe",
+              doctorName: "Dr. Smith",
+              date: "2025-08-19",
+              time: "09:00",
+              room: "Room 1",
+            },
           ],
         }),
       } as any)
@@ -48,7 +55,12 @@ describe("Full Clinician Journey (Integration)", () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          appointment: { id: "1", patientName: "John Doe", doctorName: "Dr. Smith", room: "Room 1" },
+          appointment: {
+            id: "1",
+            patientName: "John Doe",
+            doctorName: "Dr. Smith",
+            room: "Room 1",
+          },
         }),
       } as any)
       // Upload transcription
@@ -59,7 +71,10 @@ describe("Full Clinician Journey (Integration)", () => {
       // Poll transcription result
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ status: "completed", transcript: "This is a mocked transcript generated for testing." }),
+        json: async () => ({
+          status: "completed",
+          transcript: "This is a mocked transcript generated for testing.",
+        }),
       } as any)
       // Save edited transcription
       .mockResolvedValueOnce({
@@ -85,27 +100,45 @@ describe("Full Clinician Journey (Integration)", () => {
     // --- Dashboard shows appointment ---
     expect(await screen.findByText(/john doe/i)).toBeInTheDocument();
 
-    // Click into appointment
-    fireEvent.click(screen.getByText(/john doe/i));
+    // Click into appointment detail
+    fireEvent.click(screen.getByRole("button", { name: /view details/i }));
 
-    // Simulate recording flow
+    // Ensure AppointmentDetail is loaded
+    expect(
+      await screen.findByText(/appointment details/i)
+    ).toBeInTheDocument();
+
+    // --- Recording flow ---
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: /patient has given consent for recording/i,
+      })
+    );
+
     fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
     await waitFor(() =>
       expect(screen.getByText(/recording in progress/i)).toBeInTheDocument()
     );
+
     fireEvent.click(screen.getByRole("button", { name: /pause recording/i }));
 
-    // Send for transcription
-    fireEvent.click(screen.getByRole("button", { name: /send for transcription/i }));
-    expect(await screen.findByText(/mocked transcript/i)).toBeInTheDocument();
+    // --- Transcription flow ---
+    fireEvent.click(
+      screen.getByRole("button", { name: /send for transcription/i })
+    );
+    expect(
+      await screen.findByText(/mocked transcript/i)
+    ).toBeInTheDocument();
 
-    // Edit transcript
-    fireEvent.click(screen.getByRole("button", { name: /edit transcription/i }));
+    // --- Edit transcription ---
+    fireEvent.click(
+      screen.getByRole("button", { name: /edit transcription/i })
+    );
     const textarea = screen.getByRole("textbox");
     fireEvent.change(textarea, { target: { value: "Edited transcript text" } });
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
 
-    // Reload page → transcript still shown
+    // --- Reload page → transcript still shown ---
     render(
       <MemoryRouter initialEntries={["/appointment/1"]}>
         <Routes>
@@ -114,6 +147,8 @@ describe("Full Clinician Journey (Integration)", () => {
       </MemoryRouter>
     );
 
-    expect(await screen.findByText(/edited transcript text/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/edited transcript text/i)
+    ).toBeInTheDocument();
   });
 });
