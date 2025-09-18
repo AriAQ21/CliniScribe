@@ -1,6 +1,6 @@
 // tests/integration/auth-flow.test.tsx
 
-// ✅ Mock supabase FIRST, before importing anything else
+// Mock supabase FIRST, before importing anything else
 import { vi, describe, it, beforeEach, expect } from "vitest";
 
 // Mock supabase client
@@ -16,7 +16,7 @@ vi.mock("@/integrations/supabase/client", () => {
   };
 });
 
-// ✅ Now safe to import everything else
+// Now safe to import everything else
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import AuthPage from "@/pages/AuthPage";
