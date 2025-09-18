@@ -1,7 +1,7 @@
-This tests:
-* Valid CSV → success toast/status message.
-* Malformed CSV (invalid date) → validation error message.
-* Duplicates → “duplicate skipped” message.
+// This tests:
+// * Valid CSV → success toast/status message.
+// * Malformed CSV (invalid date) → validation error message.
+// * Duplicates → “duplicate skipped” message.
 
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi, describe, it, beforeEach, expect } from "vitest";
