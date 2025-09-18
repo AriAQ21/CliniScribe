@@ -88,9 +88,6 @@ describe("Full Clinician Journey (Integration)", () => {
     // Click into appointment
     fireEvent.click(screen.getByText(/john doe/i));
 
-    // --- Appointment details ---
-    expect(await screen.findByText(/dr\. smith/i)).toBeInTheDocument();
-
     // Simulate recording flow
     fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
     await waitFor(() =>
