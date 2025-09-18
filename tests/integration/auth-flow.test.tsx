@@ -40,18 +40,6 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   return isAuthenticated ? <>{children}</> : <AuthPage />;
 };
 
-// Dashboard with logout button stub
-const DashboardWithLogout = ({ onLogout }: { onLogout: () => void }) => (
-  <>
-    <button onClick={onLogout}>Logout</button>
-    <Index
-      dummyAppointments={[]}
-      importedAppointments={[]}
-      selectedDate={new Date()}
-    />
-  </>
-);
-
 describe("Authentication flow (integration)", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -253,9 +241,9 @@ describe("Authentication flow (integration)", () => {
 
     render(<TestApp />);
 
-    fireEvent.change(screen.getByLabelText(/email/i), {
-      target: { value: "alice@email.com" },
-    });
+    // Fill login only if form is present
+    const emailInput = await screen.findByLabelText(/email/i, {}, { timeout: 5000 });
+    fireEvent.change(emailInput, { target: { value: "alice@email.com" } });
     fireEvent.change(screen.getByLabelText(/password/i), {
       target: { value: "password" },
     });
@@ -287,13 +275,22 @@ describe("Authentication flow (integration)", () => {
         <Routes>
           <Route
             path="/dashboard"
-            element={<DashboardWithLogout onLogout={mockLogout} />}
+            element={
+              <Index
+                dummyAppointments={[]}
+                importedAppointments={[]}
+                selectedDate={new Date()}
+              />
+            }
           />
         </Routes>
       </MemoryRouter>
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /logout/i }));
+    // Select the last "Logout" button (the real DashboardHeader one)
+    const logoutButtons = screen.getAllByRole("button", { name: /logout/i });
+    fireEvent.click(logoutButtons[logoutButtons.length - 1]);
+
     expect(mockLogout).toHaveBeenCalled();
   });
 });
