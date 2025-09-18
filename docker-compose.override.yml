@@ -34,24 +34,23 @@ services:
     networks:
       - medical-network
 
-  # Playwright E2E Tests
+  # Integration Tests
   integration-tests:
-    image: mcr.microsoft.com/playwright:v1.55.0-jammy
+    build:
+      context: .
+      dockerfile: Dockerfile
     working_dir: /app
     command: >
       sh -c "npm install &&
-             ./scripts/wait-for-frontend.sh &&
-             npx playwright test"
+           npm run test:integration"
     volumes:
       - ./:/app
       - /app/node_modules
-    depends_on:
-      - backend
-      - frontend
     networks:
-      - medical-network
+    - medical-network
+  
 
-  # e2e-tests-real 
+  # E2E Tests
   e2e-tests-real:
     image: mcr.microsoft.com/playwright:v1.55.0-jammy
     working_dir: /app
