@@ -108,26 +108,30 @@ describe("Appointments flow (integration)", () => {
   });
 
   it("user can navigate to appointment details and see transcript placeholder", async () => {
-    render(<AppUnderTest />);
+  render(<AppUnderTest />);
 
-    fireEvent.click(screen.getByRole("button", { name: /view details/i }));
+  fireEvent.click(screen.getByRole("button", { name: /view details/i }));
 
+  // Match header text by textContent since CardTitle isn’t a semantic heading
+  expect(
+    await screen.findByText((content, node) =>
+      node?.textContent?.includes("Appointment Details")
+    )
+  ).toBeInTheDocument();
 
-    expect(await screen.findByText(/appointment details/i)).toBeInTheDocument();
+  // Probe for any transcript-related UI
+  const probes = [
+    /consent/i,
+    /start recording/i,
+    /upload (audio|file)/i,
+    /edit transcription/i,
+    /send for transcription/i,
+    /transcript|transcription/i,
+  ];
 
-    // Probe for any transcript-related UI
-    const probes = [
-      /consent/i,
-      /start recording/i,
-      /upload (audio|file)/i,
-      /edit transcription/i,
-      /send for transcription/i,
-      /transcript|transcription/i,
-    ];
-
-    const found = probes.some((pattern) =>
-      screen.queryByText(pattern, { exact: false })
-    );
-    expect(found).toBe(true);
-  });
+  const found = probes.some((pattern) =>
+    screen.queryByText(pattern, { exact: false })
+  );
+  expect(found).toBe(true);
 });
+
