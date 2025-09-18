@@ -5,7 +5,7 @@ import { vi, describe, it, beforeEach, expect } from "vitest";
 import AuthPage from "@/pages/AuthPage";
 import Dashboard from "@/pages/Index";
 
-// Mock navigate
+// 🔹 Mock navigate
 const mockNavigate = vi.fn();
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>(
@@ -14,20 +14,33 @@ vi.mock("react-router-dom", async () => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
-// Supabase mock (chain-friendly)
+// 🔹 Supabase mock with logging
 vi.mock("@/integrations/supabase/client", () => {
   const mockSingle = vi.fn();
-  const mockEq = vi.fn(() => ({ eq: mockEq, single: mockSingle }));
-  const mockSelect = vi.fn(() => ({ eq: mockEq, single: mockSingle }));
-  const mockFrom = vi.fn(() => ({
-    select: mockSelect,
-    eq: mockEq,
-    single: mockSingle,
-  }));
+  const chain = {
+    eq: vi.fn((...args) => {
+      console.log("🟡 supabase.eq called with:", args);
+      return chain;
+    }),
+    single: vi.fn((...args) => {
+      console.log("🟡 supabase.single called with:", args);
+      return mockSingle();
+    }),
+  };
+
+  const mockSelect = vi.fn((...args) => {
+    console.log("🟡 supabase.select called with:", args);
+    return chain;
+  });
+
+  const mockFrom = vi.fn((...args) => {
+    console.log("🟡 supabase.from called with:", args);
+    return { select: mockSelect };
+  });
 
   return {
     supabase: { from: mockFrom },
-    __mocks: { mockFrom, mockSelect, mockEq, mockSingle },
+    __mocks: { mockFrom, mockSelect, mockSingle },
   };
 });
 
@@ -38,7 +51,7 @@ describe("Authentication flow (integration)", () => {
     vi.clearAllMocks();
     localStorage.clear();
 
-    // Get fresh mock references each test
+    // Import fresh mocks each time
     const { __mocks } = await import("@/integrations/supabase/client");
     mockSingle = __mocks.mockSingle;
   });
