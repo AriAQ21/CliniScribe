@@ -1,9 +1,8 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
 import App from "@/App";
 
-// 🩹 Polyfill matchMedia for JSDOM
+// Polyfill matchMedia for JSDOM (used by sonner)
 beforeAll(() => {
   window.matchMedia = vi.fn().mockImplementation(query => ({
     matches: false,
@@ -17,13 +16,14 @@ beforeAll(() => {
   }));
 });
 
+// Reset router path before each test
+beforeEach(() => {
+  window.history.pushState({}, "Test page", "/");
+});
+
 describe("Full Clinician Journey (Integration)", () => {
   it("completes full flow: login → record → transcript → edit → save → reload", async () => {
-    render(
-      <MemoryRouter initialEntries={["/"]}>
-        <App />
-      </MemoryRouter>
-    );
+    render(<App />);
 
     // Step 1: Dashboard should load
     await waitFor(() => {
@@ -74,17 +74,11 @@ describe("Full Clinician Journey (Integration)", () => {
     await userEvent.click(saveButton);
 
     await waitFor(() => {
-      expect(
-        screen.getByText(/progress saved/i)
-      ).toBeInTheDocument();
+      expect(screen.getByText(/progress saved/i)).toBeInTheDocument();
     });
 
     // Step 8: Reload & verify saved transcript
-    render(
-      <MemoryRouter initialEntries={[window.location.pathname]}>
-        <App />
-      </MemoryRouter>
-    );
+    render(<App />);
 
     await waitFor(() => {
       expect(screen.getByText(/edited/i)).toBeInTheDocument();
