@@ -1,3 +1,4 @@
+// tests/integration/transcription.int.spec.tsx
 // * Upload → transcript shown (via handleSendForTranscription + UI render).
 // * Edit + Save calls handleSaveTranscription.
 // * Edit + Cancel calls handleCancelEdit and leaves old text intact.
@@ -74,13 +75,20 @@ describe("Transcription integration", () => {
     // open upload dialog
     fireEvent.click(screen.getByRole("button", { name: /upload audio/i }));
 
-    // simulate file selection
-    const file = new File(["dummy audio"], "test-audio.wav", { type: "audio/wav" });
-    const input = screen.getByLabelText(/upload file/i);
+    // simulate file selection (hidden input inside dialog)
+    const file = new File(["dummy audio"], "test-audio.wav", {
+      type: "audio/wav",
+    });
+    const input = document.querySelector(
+      'input[type="file"]'
+    ) as HTMLInputElement;
+    expect(input).toBeTruthy();
     fireEvent.change(input, { target: { files: [file] } });
 
     // click send inside the dialog
-    fireEvent.click(screen.getByRole("button", { name: /send for transcription/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /send for transcription/i })
+    );
 
     await waitFor(() => {
       expect(mockUploadFileForTranscription).toHaveBeenCalled();
@@ -91,9 +99,11 @@ describe("Transcription integration", () => {
   it("edits and saves transcript", async () => {
     render(<TestApp />);
 
-    fireEvent.click(screen.getByRole("button", { name: /edit transcription/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /edit transcription/i })
+    );
 
-    const textarea = screen.getByRole("textbox");
+    const textarea = await screen.findByRole("textbox");
     fireEvent.change(textarea, { target: { value: "Edited transcript" } });
 
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
@@ -104,9 +114,11 @@ describe("Transcription integration", () => {
   it("cancels transcript edit", async () => {
     render(<TestApp />);
 
-    fireEvent.click(screen.getByRole("button", { name: /edit transcription/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /edit transcription/i })
+    );
 
-    const textarea = screen.getByRole("textbox");
+    const textarea = await screen.findByRole("textbox");
     fireEvent.change(textarea, { target: { value: "Unsaved changes" } });
 
     fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
