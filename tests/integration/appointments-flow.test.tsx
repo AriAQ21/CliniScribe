@@ -48,7 +48,6 @@ vi.mock("@/hooks/useAppointmentDetails", () => ({
   }),
 }));
 
-
 vi.mock("@/hooks/useAppointmentStatus", () => ({
   useAppointmentStatus: () => ({
     status: "Not started",
@@ -69,70 +68,91 @@ vi.mock("@/hooks/useTranscription", () => ({
   }),
 }));
 
-// --- Test wrapper ---
-const AppUnderTest = () => (
-  <MemoryRouter initialEntries={["/dashboard"]}>
-    <Routes>
-      <Route
-        path="/dashboard"
-        element={
-          <UnifiedAppointmentsList
-            dummyAppointments={[]}
-            importedAppointments={[
-              {
-                id: "1",
-                patientName: "John Doe",
-                doctorName: "Dr. Smith",
-                room: "Room 101",
-                date: "2025-08-19",
-                time: "09:00",
-              },
-            ]}
-            selectedDate={new Date("2025-08-19")}
-          />
-        }
-      />
-      <Route path="/appointment/:id" element={<AppointmentDetail />} />
-    </Routes>
-  </MemoryRouter>
-);
-
 describe("Appointments flow (integration)", () => {
   beforeEach(() => {
     vi.resetAllMocks();
   });
 
   it("user can see today's appointments", () => {
-    render(<AppUnderTest />);
+    render(
+      <MemoryRouter initialEntries={["/dashboard"]}>
+        <Routes>
+          <Route
+            path="/dashboard"
+            element={
+              <UnifiedAppointmentsList
+                dummyAppointments={[]}
+                importedAppointments={[
+                  {
+                    id: "1",
+                    patientName: "John Doe",
+                    doctorName: "Dr. Smith",
+                    room: "Room 101",
+                    date: "2025-08-19",
+                    time: "09:00",
+                  },
+                ]}
+                selectedDate={new Date("2025-08-19")}
+              />
+            }
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+
     expect(screen.getByText("John Doe")).toBeInTheDocument();
   });
 
   it("user can navigate to appointment details and see transcript placeholder", async () => {
-  render(<AppUnderTest />);
+    render(
+      <MemoryRouter initialEntries={["/dashboard"]}>
+        <Routes>
+          <Route
+            path="/dashboard"
+            element={
+              <UnifiedAppointmentsList
+                dummyAppointments={[]}
+                importedAppointments={[
+                  {
+                    id: "1",
+                    patientName: "John Doe",
+                    doctorName: "Dr. Smith",
+                    room: "Room 101",
+                    date: "2025-08-19",
+                    time: "09:00",
+                  },
+                ]}
+                selectedDate={new Date("2025-08-19")}
+              />
+            }
+          />
+          <Route path="/appointment/:id" element={<AppointmentDetail />} />
+        </Routes>
+      </MemoryRouter>
+    );
 
-  fireEvent.click(screen.getByRole("button", { name: /view details/i }));
+    fireEvent.click(screen.getByRole("button", { name: /view details/i }));
 
-  // Match header text by textContent since CardTitle isn’t a semantic heading
-  expect(
-    await screen.findByText((content, node) =>
-      node?.textContent?.includes("Appointment Details")
-    )
-  ).toBeInTheDocument();
+    // Header isn’t a semantic <h1>, so match by textContent
+    expect(
+      await screen.findByText((_, node) =>
+        node?.textContent?.includes("Appointment Details")
+      )
+    ).toBeInTheDocument();
 
-  // Probe for any transcript-related UI
-  const probes = [
-    /consent/i,
-    /start recording/i,
-    /upload (audio|file)/i,
-    /edit transcription/i,
-    /send for transcription/i,
-    /transcript|transcription/i,
-  ];
+    // Probe for any transcript-related UI
+    const probes = [
+      /consent/i,
+      /start recording/i,
+      /upload (audio|file)/i,
+      /edit transcription/i,
+      /send for transcription/i,
+      /transcript|transcription/i,
+    ];
 
-  const found = probes.some((pattern) =>
-    screen.queryByText(pattern, { exact: false })
-  );
-  expect(found).toBe(true);
+    const found = probes.some((pattern) =>
+      screen.queryByText(pattern, { exact: false })
+    );
+    expect(found).toBe(true);
+  });
 });
-});
-
