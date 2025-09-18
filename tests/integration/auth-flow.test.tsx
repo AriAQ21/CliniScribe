@@ -14,28 +14,29 @@ vi.mock("react-router-dom", async () => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
-// Hold references to mocks
-let mockSingle: ReturnType<typeof vi.fn>;
-let mockFrom: ReturnType<typeof vi.fn>;
-
 // Supabase mock
-vi.doMock("@/integrations/supabase/client", () => {
-  mockSingle = vi.fn();
+vi.mock("@/integrations/supabase/client", () => {
+  const mockSingle = vi.fn();
   const mockEq = vi.fn(() => ({ eq: mockEq, single: mockSingle }));
   const mockSelect = vi.fn(() => ({ eq: mockEq }));
-  mockFrom = vi.fn(() => ({ select: mockSelect }));
+  const mockFrom = vi.fn(() => ({ select: mockSelect }));
 
-  return { supabase: { from: mockFrom } };
+  return {
+    supabase: { from: mockFrom },
+    __mocks: { mockFrom, mockSelect, mockEq, mockSingle },
+  };
 });
 
 describe("Authentication flow (integration)", () => {
-  beforeEach(() => {
+  let mockSingle: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
     vi.clearAllMocks();
     localStorage.clear();
 
-    // Re-initialize Supabase mock for each test
-    mockSingle.mockReset();
-    mockFrom.mockReset();
+    // Import fresh mocks every time
+    const { __mocks } = await import("@/integrations/supabase/client");
+    mockSingle = __mocks.mockSingle;
   });
 
   it("logs in successfully and navigates to dashboard", async () => {
