@@ -55,11 +55,13 @@ describe("AppointmentDetail - Upload Audio flow", () => {
     // open dialog
     fireEvent.click(screen.getByRole("button", { name: /upload audio/i }));
 
-    const fileInput = screen.getByRole("textbox", { hidden: true }) 
-      || screen.getByRole("button", { hidden: true });
+    // find the hidden file input
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    expect(fileInput).not.toBeNull();
 
+    // simulate file selection
     const fakeFile = new File(["dummy-audio"], "test_audio.wav", { type: "audio/wav" });
-    fireEvent.change(fileInput, { target: { files: [fakeFile] } });
+    fireEvent.change(fileInput!, { target: { files: [fakeFile] } });
 
     // confirm file is shown
     await waitFor(() => expect(screen.getByText(/file selected/i)).toBeInTheDocument());
