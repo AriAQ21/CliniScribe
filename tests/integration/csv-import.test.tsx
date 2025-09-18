@@ -8,6 +8,11 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi } from "vitest";
 import { AppointmentImportDialog } from "@/components/AppointmentImportDialog";
 
+// Mock useAuth so we always have a user
+vi.mock("@/hooks/useAuth", () => ({
+  useAuth: () => ({ user: { user_id: "test-user" } }),
+}));
+
 function getFileInput() {
   return screen.getByRole("presentation").querySelector("input[type='file']") as HTMLInputElement;
 }
@@ -15,7 +20,6 @@ function getFileInput() {
 describe("Appointment Import Dialog (integration)", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    // default stub for fetch
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ imported: 1, total_processed: 1 }),
@@ -39,10 +43,8 @@ describe("Appointment Import Dialog (integration)", () => {
     const input = getFileInput();
     fireEvent.change(input, { target: { files: [file] } });
 
-    // Wait until file is displayed
     await screen.findByText("appointments.csv");
 
-    // Import
     fireEvent.click(screen.getByRole("button", { name: /import appointments/i }));
 
     await waitFor(() => {
@@ -73,7 +75,6 @@ describe("Appointment Import Dialog (integration)", () => {
     const input = getFileInput();
     fireEvent.change(input, { target: { files: [file] } });
 
-    // Wait for file name to appear
     await screen.findByText("invalid.csv");
 
     fireEvent.click(screen.getByRole("button", { name: /import appointments/i }));
@@ -108,7 +109,6 @@ describe("Appointment Import Dialog (integration)", () => {
     const input = getFileInput();
     fireEvent.change(input, { target: { files: [file] } });
 
-    // Wait for file name to appear
     await screen.findByText("dupes.csv");
 
     fireEvent.click(screen.getByRole("button", { name: /import appointments/i }));
