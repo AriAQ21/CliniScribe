@@ -15,9 +15,9 @@ vi.mock("react-router-dom", async () => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
-// --- Inline Supabase mock (self-contained) ---
-const mockSingle = vi.fn();
+// --- Supabase mock (everything lives inside factory) ---
 vi.mock("@/integrations/supabase/client", () => {
+  const mockSingle = vi.fn();
   const mockEq = vi.fn(() => ({ eq: mockEq, single: mockSingle }));
   const mockSelect = vi.fn(() => ({ eq: mockEq, single: mockSingle }));
   const mockFrom = vi.fn(() => ({ select: mockSelect }));
@@ -27,16 +27,21 @@ vi.mock("@/integrations/supabase/client", () => {
   };
 });
 
-// pull out the mocks so we can use them
-const { __mocks } = vi.mocked(
-  await import("@/integrations/supabase/client")
-);
-const { mockSingle } = __mocks;
+// Extract mocks after Vitest hoists them
+const { __mocks } = vi.hoisted(() => ({
+  __mocks: {} as any,
+}));
 
 describe("Authentication flow (integration)", () => {
-  beforeEach(() => {
+  let mockSingle: any;
+
+  beforeEach(async () => {
     vi.clearAllMocks();
     localStorage.clear();
+
+    // fresh import of mocks for each test
+    const mod = await import("@/integrations/supabase/client");
+    mockSingle = mod.__mocks.mockSingle;
   });
 
   it("logs in successfully and navigates to dashboard", async () => {
