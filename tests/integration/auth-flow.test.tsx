@@ -18,7 +18,8 @@ vi.mock("react-router-dom", async () => {
 vi.mock("@/integrations/supabase/client", () => {
   const mockSingle = vi.fn();
   const mockEq = vi.fn(() => ({ eq: mockEq, single: mockSingle }));
-  const mockSelect = vi.fn(() => ({ eq: mockEq }));
+  // 👇 make mockSelect return both eq + single
+  const mockSelect = vi.fn(() => ({ eq: mockEq, single: mockSingle }));
   const mockFrom = vi.fn(() => ({ select: mockSelect }));
 
   return {
