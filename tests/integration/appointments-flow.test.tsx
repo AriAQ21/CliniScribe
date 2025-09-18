@@ -104,7 +104,7 @@ describe("Appointments flow (integration)", () => {
     fireEvent.click(screen.getByText("View Details"));
 
     expect(
-      screen.getByRole("heading", { name: /Appointment Detail/i })
+      screen.getByRole("heading", { name: /Appointment Details/i })
     ).toBeInTheDocument();
 
     // Probe for any transcript-related UI
