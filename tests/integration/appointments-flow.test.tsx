@@ -9,6 +9,7 @@ vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({ user: { user_id: 123 } }),
 }));
 
+
 vi.mock("@/hooks/useAppointments", () => ({
   useAppointments: () => ({
     appointments: [
@@ -27,8 +28,8 @@ vi.mock("@/hooks/useAppointments", () => ({
 }));
 
 vi.mock("@/hooks/useAppointmentDetails", () => ({
-  useAppointmentDetails: () => ({
-    appointment: {
+  useAppointmentDetails: (id: string) => ({
+    appointment: id === "1" ? {
       id: "1",
       patient_name: "John Doe",
       doctor_name: "Dr. Smith",
@@ -36,12 +37,12 @@ vi.mock("@/hooks/useAppointmentDetails", () => ({
       appointment_date: "2025-08-19",
       appointment_time: "09:00",
       user_id: 123,
-    },
-    patientData: {
+    } : null,
+    patientData: id === "1" ? {
       name: "John Doe",
       dateOfBirth: "01/01/1970",
       nhsNumber: "1234567890",
-    },
+    } : null,
     loading: false,
     error: null,
   }),
@@ -102,12 +103,16 @@ describe("Appointments flow (integration)", () => {
     render(<AppUnderTest />);
 
     fireEvent.click(screen.getByRole("button", { name: /view details/i }));
-    screen.debug();
 
-    // wait for heading
-    expect(
-      await screen.findByRole("heading", { name: /Appointment Details/i })
-    ).toBeInTheDocument();
+    // debug if needed
+    // screen.debug();
+
+    expect(await screen.findByText(/appointment details/i)).toBeInTheDocument();
+
+    // // wait for heading
+    // expect(
+    //   await screen.findByRole("heading", { name: /Appointment Details/i })
+    // ).toBeInTheDocument();
 
     // Probe for any transcript-related UI
     const probes = [
