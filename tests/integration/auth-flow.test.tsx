@@ -1,24 +1,20 @@
-// tests/integration/auth-flow.test.tsx
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi, describe, it, beforeEach, expect } from "vitest";
 
 import AuthPage from "@/pages/AuthPage";
-import Dashboard from "@/pages/Index"; // your dashboard page
+import Dashboard from "@/pages/Index";
 
-// --- Mock useNavigate ---
+// Mock navigate
 const mockNavigate = vi.fn();
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>(
     "react-router-dom"
   );
-  return {
-    ...actual,
-    useNavigate: () => mockNavigate,
-  };
+  return { ...actual, useNavigate: () => mockNavigate };
 });
 
-// --- Mock Supabase client ---
+// Mock supabase
 vi.mock("@/integrations/supabase/client", () => {
   const mockSingle = vi.fn();
   const mockEq = vi.fn(() => ({ eq: mockEq, single: mockSingle }));
@@ -27,12 +23,10 @@ vi.mock("@/integrations/supabase/client", () => {
 
   return {
     supabase: { from: mockFrom },
-    // expose helpers so we can control them in tests
     __mocks: { mockFrom, mockSelect, mockEq, mockSingle },
   };
 });
 
-// pull out the mocks so we can use them in tests
 const { mockSingle } = (vi.mocked(
   await import("@/integrations/supabase/client")
 ).__mocks);
@@ -76,15 +70,18 @@ describe("Authentication flow (integration)", () => {
     await waitFor(() =>
       expect(mockNavigate).toHaveBeenCalledWith("/dashboard")
     );
-    expect(await screen.findByText(/dashboard/i)).toBeInTheDocument();
+
+    // The dashboard header has <h2>Dashboard</h2>
+    expect(await screen.findByRole("heading", { name: /dashboard/i }))
+      .toBeInTheDocument();
   });
 
   it("logs out successfully and navigates to auth page", async () => {
     render(
       <MemoryRouter initialEntries={["/dashboard"]}>
         <Routes>
-          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/auth" element={<AuthPage />} />
+          <Route path="/dashboard" element={<Dashboard />} />
         </Routes>
       </MemoryRouter>
     );
@@ -94,6 +91,9 @@ describe("Authentication flow (integration)", () => {
     await waitFor(() =>
       expect(mockNavigate).toHaveBeenCalledWith("/auth")
     );
-    expect(await screen.findByText(/sign in/i)).toBeInTheDocument();
+
+    // Check for Sign In heading on AuthPage
+    expect(await screen.findByRole("heading", { name: /sign in/i }))
+      .toBeInTheDocument();
   });
 });
