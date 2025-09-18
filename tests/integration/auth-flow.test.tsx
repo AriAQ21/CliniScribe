@@ -1,4 +1,3 @@
-// tests/integration/auth-flow.test.tsx
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi, describe, it, beforeEach, expect } from "vitest";
@@ -6,7 +5,7 @@ import { vi, describe, it, beforeEach, expect } from "vitest";
 import AuthPage from "@/pages/AuthPage";
 import Dashboard from "@/pages/Index";
 
-// --- Mock navigate ---
+// Mock navigate
 const mockNavigate = vi.fn();
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>(
@@ -15,33 +14,26 @@ vi.mock("react-router-dom", async () => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
-// --- Supabase mock (everything lives inside factory) ---
-vi.mock("@/integrations/supabase/client", () => {
-  const mockSingle = vi.fn();
+// Declare variables to hold mock fns
+let mockSingle: ReturnType<typeof vi.fn>;
+let mockFrom: ReturnType<typeof vi.fn>;
+
+// Mock supabase dynamically so it only applies in this file
+vi.doMock("@/integrations/supabase/client", () => {
+  mockSingle = vi.fn();
   const mockEq = vi.fn(() => ({ eq: mockEq, single: mockSingle }));
-  const mockSelect = vi.fn(() => ({ eq: mockEq, single: mockSingle }));
-  const mockFrom = vi.fn(() => ({ select: mockSelect }));
+  const mockSelect = vi.fn(() => ({ eq: mockEq }));
+  mockFrom = vi.fn(() => ({ select: mockSelect }));
+
   return {
     supabase: { from: mockFrom },
-    __mocks: { mockFrom, mockSelect, mockEq, mockSingle },
   };
 });
 
-// Extract mocks after Vitest hoists them
-const { __mocks } = vi.hoisted(() => ({
-  __mocks: {} as any,
-}));
-
 describe("Authentication flow (integration)", () => {
-  let mockSingle: any;
-
-  beforeEach(async () => {
+  beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
-
-    // fresh import of mocks for each test
-    const mod = await import("@/integrations/supabase/client");
-    mockSingle = mod.__mocks.mockSingle;
   });
 
   it("logs in successfully and navigates to dashboard", async () => {
