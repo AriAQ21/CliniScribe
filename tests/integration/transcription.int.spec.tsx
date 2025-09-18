@@ -2,14 +2,13 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { vi } from "vitest";
+import React from "react";
 import AppointmentDetail from "@/pages/AppointmentDetail";
 
 // spies
 const mockUploadFileForTranscription = vi.fn();
 const mockSendForTranscription = vi.fn();
 const mockSaveTranscription = vi.fn();
-
-let isEditing = false;
 
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({ user: { user_id: 1 } }),
@@ -28,37 +27,53 @@ vi.mock("@/hooks/useAppointmentDetails", () => ({
   }),
 }));
 
-vi.mock("@/hooks/useTranscription", () => ({
-  useTranscription: () => ({
-    transcriptionText: "Patient reports mild headache.",
+// Wrapper so we can control editing state properly
+function TranscriptionProviderMock({ children }: { children: React.ReactNode }) {
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [text, setText] = React.useState("Patient reports mild headache.");
+
+  (vi.mockedHooks as any).useTranscription = () => ({
+    transcriptionText: text,
     isEditingTranscription: isEditing,
     isProcessing: false,
     isLoadingExistingTranscription: false,
     permissionGranted: true,
     recordingState: "idle",
     hasRecorded: true,
-    handleEditTranscription: () => {
-      isEditing = true;
+    handleEditTranscription: () => setIsEditing(true),
+    handleCancelEdit: () => setIsEditing(false),
+    handleSaveTranscription: (newText: string) => {
+      mockSaveTranscription(newText);
+      setText(newText);
+      setIsEditing(false);
     },
-    handleCancelEdit: () => {
-      isEditing = false;
-    },
-    handleSaveTranscription: mockSaveTranscription,
-    handleSendForTranscription: () => {
-      mockSendForTranscription();
-    },
-    handleUploadFileForTranscription: () => {
-      mockUploadFileForTranscription();
-    },
-    setTranscriptionText: vi.fn(),
-  }),
+    handleSendForTranscription: () => mockSendForTranscription(),
+    handleUploadFileForTranscription: () => mockUploadFileForTranscription(),
+    setTranscriptionText: setText,
+  });
+
+  return <>{children}</>;
+}
+
+const viMock = vi.mock;
+const viMockCache: any = {};
+viMock("@/hooks/useTranscription", () => ({
+  useTranscription: () => viMockCache.useTranscription?.(),
 }));
+(vi as any).mockedHooks = viMockCache;
 
 function TestApp() {
   return (
     <MemoryRouter initialEntries={["/appointments/1"]}>
       <Routes>
-        <Route path="/appointments/:id" element={<AppointmentDetail />} />
+        <Route
+          path="/appointments/:id"
+          element={
+            <TranscriptionProviderMock>
+              <AppointmentDetail />
+            </TranscriptionProviderMock>
+          }
+        />
       </Routes>
     </MemoryRouter>
   );
@@ -67,9 +82,6 @@ function TestApp() {
 describe("Transcription integration", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    isEditing = false;
-
-    // stub media devices for useMicrophoneSelection
     (global.navigator.mediaDevices as any) = {
       enumerateDevices: vi.fn().mockResolvedValue([
         { deviceId: "mic1", kind: "audioinput", label: "Fake Microphone" },
@@ -80,6 +92,7 @@ describe("Transcription integration", () => {
 
   it("uploads audio and shows transcript", async () => {
     render(<TestApp />);
+    screen.debug(); // 👈 dump DOM at start
 
     fireEvent.click(screen.getByRole("button", { name: /upload audio/i }));
 
@@ -101,31 +114,37 @@ describe("Transcription integration", () => {
 
   it("edits and saves transcript", async () => {
     render(<TestApp />);
-    const transcriptText = "Patient reports mild headache.";
 
+    const transcriptText = "Patient reports mild headache.";
     await screen.findByText(transcriptText);
+    screen.debug(); // 👈 confirm transcript is rendered
 
     fireEvent.click(
       screen.getByRole("button", { name: /edit transcription/i })
     );
+    screen.debug(); // 👈 confirm textarea shows up
 
     const textarea = await screen.findByRole("textbox");
     fireEvent.change(textarea, { target: { value: "Edited transcript" } });
 
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
 
-    await waitFor(() => expect(mockSaveTranscription).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(mockSaveTranscription).toHaveBeenCalledWith("Edited transcript")
+    );
   });
 
   it("cancels transcript edit", async () => {
     render(<TestApp />);
-    const transcriptText = "Patient reports mild headache.";
 
+    const transcriptText = "Patient reports mild headache.";
     await screen.findByText(transcriptText);
+    screen.debug(); // 👈 confirm transcript is rendered
 
     fireEvent.click(
       screen.getByRole("button", { name: /edit transcription/i })
     );
+    screen.debug(); // 👈 confirm textarea shows up
 
     const textarea = await screen.findByRole("textbox");
     fireEvent.change(textarea, { target: { value: "Unsaved change" } });
