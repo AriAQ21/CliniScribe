@@ -1,97 +1,41 @@
-// tests/integration/fullJourney.test.tsx
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
-import { MemoryRouter, Routes, Route } from "react-router-dom";
-import Dashboard from "@/pages/Index";
-import AppointmentDetail from "@/pages/AppointmentDetail";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import App from "@/App";
 
-// ───────────────────────
-// Mocks
-// ───────────────────────
+// Mock useAuth with full shape expected by useDummyUser
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({
-    user: { id: "clinician-1", name: "Dr. Test" },
+    user: {
+      user_id: 1,
+      email: "clinician@test.com",
+      first_name: "Test",
+      last_name: "Clinician",
+    },
     isAuthenticated: true,
     loading: false,
   }),
 }));
 
-// Always return a dummy appointment for *today’s* date
-vi.mock("@/hooks/useDummyAppointments", () => ({
-  useDummyAppointments: () => {
-    const todayStr = new Date().toISOString().split("T")[0];
-    return {
-      appointments: [
-        {
-          id: "1",
-          patientName: "John Doe",
-          doctorName: "Dr. Smith",
-          date: todayStr,
-          time: "09:00:00",
-          room: "Room 1",
-        },
-      ],
-      loading: false,
-      error: null,
-    };
-  },
-}));
-
-// No imported appointments
-vi.mock("@/hooks/useImportedAppointments", () => ({
-  useImportedAppointments: () => ({
-    appointments: [],
+// Mock appointment status hook
+vi.mock("@/hooks/useAppointmentStatus", () => ({
+  useAppointmentStatus: () => ({
+    status: "Not started",
     loading: false,
-    error: null,
-    refreshAppointments: vi.fn(),
   }),
 }));
 
-// Stable appointment details
-vi.mock("@/hooks/useAppointmentDetails", () => ({
-  useAppointmentDetails: (id: string) => ({
-    appointment: {
-      id,
-      room: "Room 1",
-    },
-    patientData: {
-      name: "John Doe",
-      dateOfBirth: "01/01/1980",
-      nhsNumber: "1234567890",
-      time: "09:00 AM",
-    },
-    loading: false,
-    error: null,
-  }),
+// Mock recording service
+vi.mock("@/services/recordingService", () => ({
+  startRecording: vi.fn(),
+  stopRecording: vi.fn(() => Promise.resolve("dummy-transcript")),
 }));
 
-// Stub transcription hook
-vi.mock("@/hooks/useTranscription", () => ({
-  useTranscription: () => ({
-    recordingState: "idle",
-    hasRecorded: false,
-    recordingDuration: 0,
-    transcriptionText: "",
-    transcriptionSent: false,
-    isEditingTranscription: false,
-    isProcessing: false,
-    isLoadingExistingTranscription: false,
-    permissionGranted: true,
-    setTranscriptionText: vi.fn(),
-    handleStartRecording: vi.fn(),
-    handlePauseRecording: vi.fn(),
-    handleResumeRecording: vi.fn(),
-    handleSendForTranscription: vi.fn(),
-    handleUploadFileForTranscription: vi.fn(),
-    handleEditTranscription: vi.fn(),
-    handleSaveTranscription: vi.fn(),
-    handleCancelEdit: vi.fn(),
-  }),
+// Mock transcript save service
+vi.mock("@/services/transcriptService", () => ({
+  saveTranscript: vi.fn(() => Promise.resolve(true)),
 }));
 
-// ───────────────────────
-// Test
-// ───────────────────────
 describe("Full Clinician Journey (Integration)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -100,39 +44,54 @@ describe("Full Clinician Journey (Integration)", () => {
   it("completes full flow: login → record → transcript → edit → save → reload", async () => {
     render(
       <MemoryRouter initialEntries={["/dashboard"]}>
-        <Routes>
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/appointment/:id" element={<AppointmentDetail />} />
-        </Routes>
+        <App />
       </MemoryRouter>
     );
 
-    // Dashboard loads and shows dummy appointment
+    // Step 1: Dashboard should load
     await waitFor(() => {
       expect(screen.getByText(/scheduled appointments/i)).toBeInTheDocument();
-      expect(screen.getByText(/john doe/i)).toBeInTheDocument();
     });
 
-    // Click "View Details"
-    const viewBtn = screen.getByRole("button", { name: /view details/i });
-    await act(async () => {
-      fireEvent.click(viewBtn);
-    });
+    // Step 2: Navigate to appointment detail
+    fireEvent.click(screen.getByText(/view details/i));
 
-    // Router navigates to /appointment/1
     await waitFor(() => {
       expect(screen.getByText(/appointment details/i)).toBeInTheDocument();
-      expect(screen.getByText(/patient name/i)).toBeInTheDocument();
-      expect(screen.getByText(/john doe/i)).toBeInTheDocument();
     });
 
-    // (Stubbed interactions: edit transcript etc.)
-    // Example: open "Edit Transcription" if it were rendered
-    // In this mocked test, transcriptionText="" so section shows placeholder
+    // Step 3: Start recording
+    fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
     await waitFor(() => {
-      expect(
-        screen.getByText(/transcription will appear here/i)
-      ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /stop recording/i })).toBeInTheDocument();
+    });
+
+    // Step 4: Stop recording → transcript generated
+    fireEvent.click(screen.getByRole("button", { name: /stop recording/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/dummy-transcript/i)).toBeInTheDocument();
+    });
+
+    // Step 5: Edit transcript
+    const textarea = screen.getByRole("textbox");
+    fireEvent.change(textarea, { target: { value: "Edited transcript" } });
+    expect(textarea).toHaveValue("Edited transcript");
+
+    // Step 6: Save transcript
+    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/transcript saved/i)).toBeInTheDocument();
+    });
+
+    // Step 7: Simulate reload back to dashboard
+    render(
+      <MemoryRouter initialEntries={["/dashboard"]}>
+        <App />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/scheduled appointments/i)).toBeInTheDocument();
     });
   });
 });
