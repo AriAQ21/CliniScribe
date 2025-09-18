@@ -6,21 +6,11 @@
 // * Redirect to intended page (or dashboard fallback)
 // * Logout clears session
 
-
-// tests/integration/auth-flow.test.tsx
-// This tests:
-// * Invalid creds → error message
-// * Valid creds → redirect to dashboard
-// * Session persists across reloads
-// * Redirect to intended page (or dashboard fallback)
-// * Logout clears session
-
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi, describe, it, beforeEach, expect } from "vitest";
 import AuthPage from "@/pages/AuthPage";
-import AppointmentDetail from "@/pages/AppointmentDetail";
-import Index from "@/pages/Index"; // your real dashboard
+import Index from "@/pages/Index";
 
 // shared mocks
 let mockLogin: ReturnType<typeof vi.fn>;
@@ -188,12 +178,15 @@ describe("Authentication flow (integration)", () => {
 
     mockLogin.mockResolvedValue({ user: { user_id: 1 } });
 
+    // Stub AppointmentDetail so it doesn't hang on fetch
+    const StubDetail = () => <h1>Appointment 123</h1>;
+
     const TestApp = () => (
       <MemoryRouter initialEntries={["/appointment/123"]}>
         <Routes>
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/dashboard" element={<Index />} />
-          <Route path="/appointment/:id" element={<AppointmentDetail />} />
+          <Route path="/appointment/:id" element={<StubDetail />} />
         </Routes>
       </MemoryRouter>
     );
@@ -209,7 +202,7 @@ describe("Authentication flow (integration)", () => {
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
     await waitFor(() => {
-      const onAppointment = screen.queryByText(/appointment/i);
+      const onAppointment = screen.queryByText(/appointment 123/i);
       const onDashboard =
         screen.queryByText(/imported appointments/i) ||
         screen.queryByText(/scheduled appointments/i) ||
@@ -237,9 +230,10 @@ describe("Authentication flow (integration)", () => {
       </MemoryRouter>
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /logout/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /logout|sign out/i })
+    );
 
     expect(mockLogout).toHaveBeenCalled();
   });
 });
-
