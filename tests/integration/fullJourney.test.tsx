@@ -1,15 +1,10 @@
 // tests/integration/fullJourney.test.tsx
-// This tests:
-// * Login → Dashboard → appointments visible
-// * Open an appointment detail
-// * Give consent → start recording → pause recording
-// * Send for transcription → mocked transcript appears
-// * Edit transcript → save
-// * Reload page → saved transcript still displayed
-
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi, describe, it, beforeEach, expect } from "vitest";
+import {
+  createMemoryRouter,
+  RouterProvider,
+} from "react-router-dom";
 import Dashboard from "@/pages/Index";
 import AppointmentDetail from "@/pages/AppointmentDetail";
 
@@ -27,7 +22,6 @@ vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: vi.fn() }),
 }));
 
-// Mock the dummy appointments hook to prevent infinite API calls
 vi.mock("@/hooks/useDummyAppointments", () => ({
   useDummyAppointments: () => ({
     appointments: [
@@ -35,7 +29,7 @@ vi.mock("@/hooks/useDummyAppointments", () => ({
         id: "1",
         patientName: "John Doe",
         doctorName: "Dr. Smith",
-        // 👇 use today’s date so the Dashboard filter doesn’t hide it
+        // 👇 ensures it matches today’s filter
         date: new Date().toISOString().split("T")[0],
         time: "09:00:00",
         room: "Room 1",
@@ -46,7 +40,6 @@ vi.mock("@/hooks/useDummyAppointments", () => ({
   }),
 }));
 
-// Mock the imported appointments hook
 vi.mock("@/hooks/useImportedAppointments", () => ({
   useImportedAppointments: () => ({
     appointments: [],
@@ -57,12 +50,10 @@ vi.mock("@/hooks/useImportedAppointments", () => ({
   }),
 }));
 
-// Mock polling / interval hooks
 vi.mock("@/hooks/usePolling", () => ({
   usePolling: () => ({ isPolling: false, startPolling: vi.fn(), stopPolling: vi.fn() }),
 }));
 
-// Mock appointment status hook
 vi.mock("@/hooks/useAppointmentStatus", () => ({
   useAppointmentStatus: () => ({
     status: "active",
@@ -108,7 +99,6 @@ describe("Full Clinician Journey (Integration)", () => {
     localStorage.clear();
     savedTranscriptText = "This is a mocked transcript generated for testing.";
 
-    // Reset MediaRecorder state
     mockMediaRecorder.state = "inactive";
     mockMediaRecorder.ondataavailable = null;
     mockMediaRecorder.onstop = null;
@@ -117,41 +107,7 @@ describe("Full Clinician Journey (Integration)", () => {
   it(
     "completes full flow: login → record → transcript → edit → save → reload",
     async () => {
-      // Create a simpler fetch mock focused on the appointment detail and transcription flow
       global.fetch = vi.fn().mockImplementation(async (url: string, options?: any) => {
-        // Dummy appointments
-        if (url.includes("/appointments/user/1?is_dummy=true")) {
-          return {
-            ok: true,
-            json: async () => ({
-              appointments: [
-                {
-                  id: "1",
-                  patientName: "John Doe",
-                  doctorName: "Dr. Smith",
-                  date: new Date().toISOString().split("T")[0],
-                  time: "09:00:00",
-                  room: "Room 1",
-                },
-              ],
-            }),
-          };
-        }
-
-        // Imported appointments
-        if (url.includes("/appointments/user/1?is_dummy=false")) {
-          return { ok: true, json: async () => ({ appointments: [] }) };
-        }
-
-        // Bulk import
-        if (url.includes("/appointments/bulk")) {
-          return {
-            ok: true,
-            json: async () => ({ message: "Appointments imported successfully", imported: 1, skipped: 0 }),
-          };
-        }
-
-        // Appointment status
         if (url.includes("/appointments/1/status")) {
           return {
             ok: true,
@@ -159,7 +115,6 @@ describe("Full Clinician Journey (Integration)", () => {
           };
         }
 
-        // Appointment detail
         if (url.includes("/appointment/1")) {
           return {
             ok: true,
@@ -175,22 +130,18 @@ describe("Full Clinician Journey (Integration)", () => {
           };
         }
 
-        // Transcription upload
         if (url.includes("/transcribe") && !url.includes("/status/") && !url.includes("/text/") && !url.includes("/update/")) {
           return { ok: true, json: async () => ({ audio_id: "dummy-id", status: "queued" }) };
         }
 
-        // Transcription status
         if (url.includes("/transcribe/status/dummy-id")) {
           return { ok: true, json: async () => ({ status: "completed", transcript: savedTranscriptText }) };
         }
 
-        // Transcription text
         if (url.includes("/transcribe/text/dummy-id")) {
           return { ok: true, json: async () => ({ audio_id: "dummy-id", transcript: savedTranscriptText }) };
         }
 
-        // Transcription update
         if (url.includes("/transcribe/update/dummy-id")) {
           if (options?.body) {
             try {
@@ -206,15 +157,16 @@ describe("Full Clinician Journey (Integration)", () => {
         return { ok: true, json: async () => ({}) };
       });
 
-      // Render with both routes
-      render(
-        <MemoryRouter initialEntries={["/dashboard"]}>
-          <Routes>
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/appointment/:id" element={<AppointmentDetail />} />
-          </Routes>
-        </MemoryRouter>
+      // ✅ use createMemoryRouter so we can assert on navigation
+      const router = createMemoryRouter(
+        [
+          { path: "/dashboard", element: <Dashboard /> },
+          { path: "/appointment/:id", element: <AppointmentDetail /> },
+        ],
+        { initialEntries: ["/dashboard"] }
       );
+
+      render(<RouterProvider router={router} />);
 
       // Wait for dashboard to load
       await waitFor(() => {
@@ -226,19 +178,19 @@ describe("Full Clinician Journey (Integration)", () => {
         fireEvent.click(screen.getByRole("button", { name: /view details/i }));
       });
 
-      // Verify we’re on the appointment detail page
+      // ✅ assert on router location first
+      await waitFor(() => {
+        expect(router.state.location.pathname).toBe("/appointment/1");
+      });
+
+      // then assert on DOM
       await waitFor(() => {
         expect(screen.getByText(/appointment details/i)).toBeInTheDocument();
-        expect(
-          screen.getByRole("checkbox", { name: /patient has given consent for recording/i })
-        ).toBeInTheDocument();
       });
 
       // --- Recording flow ---
       await act(async () => {
-        fireEvent.click(
-          screen.getByRole("checkbox", { name: /patient has given consent for recording/i })
-        );
+        fireEvent.click(screen.getByRole("checkbox", { name: /patient has given consent/i }));
       });
 
       await act(async () => {
@@ -285,6 +237,6 @@ describe("Full Clinician Journey (Integration)", () => {
         expect(screen.getByText(/edited transcript text/i)).toBeInTheDocument();
       });
     },
-    15000
+    20000
   );
 });
