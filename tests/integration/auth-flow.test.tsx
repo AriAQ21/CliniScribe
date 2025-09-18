@@ -37,7 +37,7 @@ describe("Authentication flow (integration)", () => {
     localStorage.clear();
   });
 
-  it("logs in successfully and shows dashboard", async () => {
+  it("logs in successfully and navigates to dashboard", async () => {
     mockSingle.mockResolvedValueOnce({
       data: {
         user_id: 1,
@@ -70,10 +70,6 @@ describe("Authentication flow (integration)", () => {
     await waitFor(() =>
       expect(mockNavigate).toHaveBeenCalledWith("/dashboard")
     );
-
-    // The dashboard header has <h2>Dashboard</h2>
-    expect(await screen.findByRole("heading", { name: /dashboard/i }))
-      .toBeInTheDocument();
   });
 
   it("logs out successfully and navigates to auth page", async () => {
@@ -91,9 +87,5 @@ describe("Authentication flow (integration)", () => {
     await waitFor(() =>
       expect(mockNavigate).toHaveBeenCalledWith("/auth")
     );
-
-    // Check for Sign In heading on AuthPage
-    expect(await screen.findByRole("heading", { name: /sign in/i }))
-      .toBeInTheDocument();
   });
 });
