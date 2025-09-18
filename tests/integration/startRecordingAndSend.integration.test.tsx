@@ -54,6 +54,29 @@ describe("Transcription Flow (integration)", () => {
     vi.mock("@/hooks/useAuth", () => ({
       useAuth: () => ({ user: { user_id: 1 } }),
     }));
+
+    //  Mock appointment details so component isn’t stuck on loading
+    vi.mock("@/hooks/useAppointmentDetails", () => ({
+      useAppointmentDetails: () => ({
+        appointment: {
+          id: "123",
+          patient_name: "John Doe",
+          doctor_name: "Dr. Smith",
+          room: "Room 1",
+          appointment_date: "2025-08-19",
+          appointment_time: "09:00:00",
+          user_id: 1,
+        },
+        patientData: {
+          name: "John Doe",
+          dateOfBirth: "01/01/1970",
+          nhsNumber: "123",
+          time: "9:00 AM",
+        },
+        error: null,
+        loading: false,
+      }),
+    }));
   });
 
   it("records, pauses, sends, and shows transcript", async () => {
@@ -92,13 +115,19 @@ describe("Transcription Flow (integration)", () => {
       </MemoryRouter>
     );
 
+    // Wait until details load before interacting
+    await screen.findByText(/appointment details/i);
+
+    // Tick consent
     fireEvent.click(
       screen.getByRole("checkbox", { name: /patient has given consent/i })
     );
 
     // Start recording
     fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
-    expect(await screen.findByText(/recording in progress/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/recording in progress/i)
+    ).toBeInTheDocument();
 
     // Pause recording
     fireEvent.click(screen.getByRole("button", { name: /pause recording/i }));
