@@ -6,6 +6,8 @@
 // * Editing & saving transcript
 // * Error recovery when sending for transcription
 
+// tests/integration/complete-clinician-journey.test.tsx
+
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi, describe, it, beforeEach, expect } from "vitest";
@@ -93,7 +95,7 @@ vi.mock("@/hooks/useTranscription", () => ({
 }));
 
 // --- Test wrapper ---
-const TestApp = () => (
+const DashboardOnly = () => (
   <MemoryRouter initialEntries={["/dashboard"]}>
     <Routes>
       <Route
@@ -115,10 +117,18 @@ const TestApp = () => (
           />
         }
       />
-      <Route path="/appointment/:id" element={<AppointmentDetail />} />
     </Routes>
   </MemoryRouter>
 );
+
+const renderDetail = () =>
+  render(
+    <MemoryRouter initialEntries={["/appointment/1"]}>
+      <Routes>
+        <Route path="/appointment/:id" element={<AppointmentDetail />} />
+      </Routes>
+    </MemoryRouter>
+  );
 
 describe("Complete Clinician Journey (integration)", () => {
   beforeEach(() => {
@@ -126,7 +136,7 @@ describe("Complete Clinician Journey (integration)", () => {
   });
 
   it("imports appointments successfully", async () => {
-    render(<TestApp />);
+    render(<DashboardOnly />);
     await act(async () => {
       await mockImportAppointments([
         { patientName: "Jane Smith", doctorName: "Dr. Johnson" },
@@ -136,12 +146,13 @@ describe("Complete Clinician Journey (integration)", () => {
   });
 
   it("runs recording flow before transcription", async () => {
-    render(<TestApp />);
+    render(<DashboardOnly />);
     fireEvent.click(screen.getByText("View Details"));
+    renderDetail(); // manual render of detail page
 
     // tick consent
     fireEvent.click(
-      screen.getByRole("checkbox", {
+      await screen.findByRole("checkbox", {
         name: /patient has given consent for recording/i,
       })
     );
@@ -149,11 +160,9 @@ describe("Complete Clinician Journey (integration)", () => {
     fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
     expect(mockStartRecording).toHaveBeenCalled();
 
-    // simulate pause
     fireEvent.click(screen.getByRole("button", { name: /pause recording/i }));
     expect(mockPauseRecording).toHaveBeenCalled();
 
-    // send for transcription
     mockSendForTranscription.mockResolvedValue({});
     fireEvent.click(
       screen.getByRole("button", { name: /send for transcription/i })
@@ -163,21 +172,21 @@ describe("Complete Clinician Journey (integration)", () => {
   });
 
   it("shows transcript after transcription completes", async () => {
-    render(<TestApp />);
+    render(<DashboardOnly />);
     fireEvent.click(screen.getByText("View Details"));
+    renderDetail();
 
-    await waitFor(() =>
-      expect(
-        screen.getByText(/headache symptoms/i)
-      ).toBeInTheDocument()
-    );
+    expect(
+      await screen.findByText(/headache symptoms/i)
+    ).toBeInTheDocument();
   });
 
   it("edits and saves transcript", async () => {
-    render(<TestApp />);
+    render(<DashboardOnly />);
     fireEvent.click(screen.getByText("View Details"));
+    renderDetail();
 
-    fireEvent.click(screen.getByRole("button", { name: /edit transcription/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /edit transcription/i }));
 
     const textarea = await screen.findByRole("textbox");
     fireEvent.change(textarea, { target: { value: "Edited transcript" } });
@@ -191,11 +200,12 @@ describe("Complete Clinician Journey (integration)", () => {
       .mockRejectedValueOnce(new Error("Service unavailable"))
       .mockResolvedValueOnce({ transcript: "Recovered transcript" });
 
-    render(<TestApp />);
+    render(<DashboardOnly />);
     fireEvent.click(screen.getByText("View Details"));
+    renderDetail();
 
     fireEvent.click(
-      screen.getByRole("checkbox", {
+      await screen.findByRole("checkbox", {
         name: /patient has given consent for recording/i,
       })
     );
@@ -211,8 +221,10 @@ describe("Complete Clinician Journey (integration)", () => {
     fireEvent.click(
       screen.getByRole("button", { name: /send for transcription/i })
     );
+
     await waitFor(() =>
       expect(mockSendForTranscription).toHaveBeenCalledTimes(2)
     );
   });
 });
+
