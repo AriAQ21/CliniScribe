@@ -1,3 +1,4 @@
+// tests/integration/startRecordingAndSend.integration.test.tsx
 // This tests:
 // * Mock transcription endpoints (/transcribe, /transcribe/status/:id, /transcribe/text/:id)
 // * Consent + recording flow:
@@ -42,12 +43,17 @@ describe("Transcription Flow (integration)", () => {
   beforeEach(() => {
     vi.resetAllMocks();
 
-    // Mock MediaRecorder + getUserMedia
+    // Mock MediaRecorder
     (global as any).MediaRecorder = MockMediaRecorder;
+
+    // Mock mediaDevices fully
     (global.navigator.mediaDevices as any) = {
       getUserMedia: vi.fn().mockResolvedValue({
         getTracks: () => [{ stop: vi.fn() }],
       }),
+      enumerateDevices: vi.fn().mockResolvedValue([
+        { deviceId: "default", kind: "audioinput", label: "Default Microphone" },
+      ]),
     };
 
     // Mock auth
@@ -55,7 +61,7 @@ describe("Transcription Flow (integration)", () => {
       useAuth: () => ({ user: { user_id: 1 } }),
     }));
 
-    //  Mock appointment details so component isn’t stuck on loading
+    // Mock appointment details so component isn’t stuck on loading
     vi.mock("@/hooks/useAppointmentDetails", () => ({
       useAppointmentDetails: () => ({
         appointment: {
