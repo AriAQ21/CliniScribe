@@ -9,7 +9,6 @@ vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({ user: { user_id: 123 } }),
 }));
 
-
 vi.mock("@/hooks/useAppointments", () => ({
   useAppointments: () => ({
     appointments: [
@@ -28,24 +27,29 @@ vi.mock("@/hooks/useAppointments", () => ({
 }));
 
 vi.mock("@/hooks/useAppointmentDetails", () => ({
-  useAppointmentDetails: (id: string) => ({
-    appointment: id === "1" ? {
-      id: "1",
-      patient_name: "John Doe",
-      doctor_name: "Dr. Smith",
-      room: "Room 101",
-      appointment_date: "2025-08-19",
-      appointment_time: "09:00",
-      user_id: 123,
-    } : null,
-    patientData: id === "1" ? {
-      name: "John Doe",
-      dateOfBirth: "01/01/1970",
-      nhsNumber: "1234567890",
-    } : null,
-    loading: false,
-    error: null,
-  }),
+  useAppointmentDetails: (id: string) => {
+    if (id === "1") {
+      return {
+        appointment: {
+          id: "1",
+          patient_name: "John Doe",
+          doctor_name: "Dr. Smith",
+          room: "Room 101",
+          appointment_date: "2025-08-19",
+          appointment_time: "09:00",
+          user_id: 123,
+        },
+        patientData: {
+          name: "John Doe",
+          dateOfBirth: "01/01/1970",
+          nhsNumber: "1234567890",
+        },
+        loading: false,
+        error: null,
+      };
+    }
+    return { appointment: null, patientData: null, loading: false, error: "Not found" };
+  },
 }));
 
 vi.mock("@/hooks/useTranscription", () => ({
@@ -102,19 +106,17 @@ describe("Appointments flow (integration)", () => {
   it("user can navigate to appointment details and see transcript placeholder", async () => {
     render(<AppUnderTest />);
 
+    // Navigate into details page
     fireEvent.click(screen.getByRole("button", { name: /view details/i }));
 
-    // debug if needed
-    // screen.debug();
+    // Match heading text flexibly (since there's an icon next to it)
+    expect(
+      await screen.findByText((content, node) =>
+        node?.textContent?.includes("Appointment Details")
+      )
+    ).toBeInTheDocument();
 
-    expect(await screen.findByText(/appointment details/i)).toBeInTheDocument();
-
-    // // wait for heading
-    // expect(
-    //   await screen.findByRole("heading", { name: /Appointment Details/i })
-    // ).toBeInTheDocument();
-
-    // Probe for any transcript-related UI
+    // Probe for any transcription-related UI
     const probes = [
       /consent/i,
       /start recording/i,
