@@ -1,16 +1,22 @@
 // tests/integration/csv-import.test.tsx
 // This tests:
 // * Valid CSV → success API call.
-// * Malformed CSV → validation error (API error).
+// * Malformed CSV → validation error (toast).
 // * Duplicates → duplicate skipped (API error).
 
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi } from "vitest";
 import { AppointmentImportDialog } from "@/components/AppointmentImportDialog";
 
-// Mock useAuth so we always have a user
+// 🔹 Spy for toast
+const toastSpy = vi.fn();
+
+// Mock hooks
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({ user: { user_id: "test-user" } }),
+}));
+vi.mock("@/hooks/use-toast", () => ({
+  useToast: () => ({ toast: toastSpy }),
 }));
 
 function getFileInput() {
@@ -53,36 +59,34 @@ describe("Appointment Import Dialog (integration)", () => {
   });
 
   it("shows validation error for malformed CSV", async () => {
-  render(
-    <AppointmentImportDialog
-      open={true}
-      onOpenChange={() => {}}
-      onImportComplete={vi.fn()}
-    />
-  );
+    render(
+      <AppointmentImportDialog
+        open={true}
+        onOpenChange={() => {}}
+        onImportComplete={vi.fn()}
+      />
+    );
 
-  const file = new File(
-    ["Patient Name,Date,Time\nJohn Doe,32/13/2025,09:00"],
-    "invalid.csv",
-    { type: "text/csv" }
-  );
-  const input = screen
-    .getByRole("presentation")
-    .querySelector("input[type='file']") as HTMLInputElement;
+    const file = new File(
+      ["Patient Name,Date,Time\nJohn Doe,32/13/2025,09:00"],
+      "invalid.csv",
+      { type: "text/csv" }
+    );
+    const input = getFileInput();
+    fireEvent.change(input, { target: { files: [file] } });
 
-  fireEvent.change(input, { target: { files: [file] } });
+    await screen.findByText("invalid.csv");
 
-  await screen.findByText("invalid.csv");
+    fireEvent.click(screen.getByRole("button", { name: /import appointments/i }));
 
-  fireEvent.click(screen.getByRole("button", { name: /import appointments/i }));
-
-  // Instead of fetch, we expect a validation message to appear
-  await waitFor(() => {
-    expect(
-      screen.getByText(/invalid date format/i)
-    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(toastSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: expect.stringMatching(/invalid date/i),
+        })
+      );
+    });
   });
-});
 
   it("handles duplicate appointments", async () => {
     (global.fetch as any) = vi.fn().mockResolvedValue({
