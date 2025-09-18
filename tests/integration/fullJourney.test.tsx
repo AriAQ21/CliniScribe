@@ -1,48 +1,29 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import App from "@/App";
 
-// Mock useAuth with full shape expected by useDummyUser
-vi.mock("@/hooks/useAuth", () => ({
-  useAuth: () => ({
-    user: {
-      user_id: 1,
-      email: "clinician@test.com",
-      first_name: "Test",
-      last_name: "Clinician",
-    },
-    isAuthenticated: true,
-    loading: false,
-  }),
-}));
-
-// Mock appointment status hook
-vi.mock("@/hooks/useAppointmentStatus", () => ({
-  useAppointmentStatus: () => ({
-    status: "Not started",
-    loading: false,
-  }),
-}));
-
-// Mock recording service
-vi.mock("@/services/recordingService", () => ({
-  startRecording: vi.fn(),
-  stopRecording: vi.fn(() => Promise.resolve("dummy-transcript")),
-}));
-
-// Mock transcript save service
-vi.mock("@/services/transcriptService", () => ({
-  saveTranscript: vi.fn(() => Promise.resolve(true)),
-}));
+// 🩹 Polyfill matchMedia for JSDOM
+beforeAll(() => {
+  window.matchMedia = vi.fn().mockImplementation(query => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(), // deprecated
+    removeListener: vi.fn(), // deprecated
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+});
 
 describe("Full Clinician Journey (Integration)", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   it("completes full flow: login → record → transcript → edit → save → reload", async () => {
-    // Render the full app (already has BrowserRouter inside)
-    render(<App />);
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <App />
+      </MemoryRouter>
+    );
 
     // Step 1: Dashboard should load
     await waitFor(() => {
@@ -51,48 +32,62 @@ describe("Full Clinician Journey (Integration)", () => {
       ).toBeInTheDocument();
     });
 
-    // Step 2: Navigate to appointment detail
-    fireEvent.click(screen.getByText(/view details/i));
+    // Step 2: Click "View Details" for first appointment
+    const viewDetailsButton = screen.getByRole("button", {
+      name: /view details/i,
+    });
+    await userEvent.click(viewDetailsButton);
 
     await waitFor(() => {
-      expect(
-        screen.getByText(/appointment details/i)
-      ).toBeInTheDocument();
+      expect(window.location.pathname).toMatch(/\/appointment\/\d+/);
     });
 
     // Step 3: Start recording
-    fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
+    const startRecordingButton = await screen.findByRole("button", {
+      name: /start recording/i,
+    });
+    await userEvent.click(startRecordingButton);
+
     await waitFor(() => {
       expect(
         screen.getByRole("button", { name: /stop recording/i })
       ).toBeInTheDocument();
     });
 
-    // Step 4: Stop recording → transcript generated
-    fireEvent.click(screen.getByRole("button", { name: /stop recording/i }));
+    // Step 4: Stop recording
+    const stopRecordingButton = screen.getByRole("button", {
+      name: /stop recording/i,
+    });
+    await userEvent.click(stopRecordingButton);
+
+    // Step 5: Wait for transcript to appear
     await waitFor(() => {
-      expect(screen.getByText(/dummy-transcript/i)).toBeInTheDocument();
+      expect(screen.getByText(/transcript/i)).toBeInTheDocument();
     });
 
-    // Step 5: Edit transcript
-    const textarea = screen.getByRole("textbox");
-    fireEvent.change(textarea, { target: { value: "Edited transcript" } });
-    expect(textarea).toHaveValue("Edited transcript");
+    // Step 6: Edit transcript
+    const transcriptBox = screen.getByRole("textbox");
+    await userEvent.type(transcriptBox, " Edited");
 
-    // Step 6: Save transcript
-    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+    // Step 7: Save
+    const saveButton = screen.getByRole("button", { name: /save/i });
+    await userEvent.click(saveButton);
+
     await waitFor(() => {
       expect(
-        screen.getByText(/transcript saved/i)
+        screen.getByText(/progress saved/i)
       ).toBeInTheDocument();
     });
 
-    // Step 7: Simulate reload back to dashboard
-    render(<App />);
+    // Step 8: Reload & verify saved transcript
+    render(
+      <MemoryRouter initialEntries={[window.location.pathname]}>
+        <App />
+      </MemoryRouter>
+    );
+
     await waitFor(() => {
-      expect(
-        screen.getByText(/scheduled appointments/i)
-      ).toBeInTheDocument();
+      expect(screen.getByText(/edited/i)).toBeInTheDocument();
     });
   });
 });
