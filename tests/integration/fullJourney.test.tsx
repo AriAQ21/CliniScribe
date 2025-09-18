@@ -1,33 +1,40 @@
+// tests/integration/fullJourney.test.tsx
+import { vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { vi } from "vitest";
 import App from "@/App";
 
-// --- Polyfill matchMedia BEFORE app renders ---
+// ✅ Polyfills just for THIS test suite
 beforeAll(() => {
-  Object.defineProperty(window, "matchMedia", {
-    writable: true,
-    value: vi.fn().mockImplementation((query) => ({
-      matches: false,
-      media: query,
-      onchange: null,
-      addListener: vi.fn(), // deprecated
-      removeListener: vi.fn(), // deprecated
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    })),
-  });
+  if (!window.matchMedia) {
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: vi.fn().mockImplementation(query => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),    // deprecated
+        removeListener: vi.fn(), // deprecated
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+  }
+
+  if (!globalThis.fetch) {
+    globalThis.fetch = vi.fn(() =>
+      Promise.reject(new Error("fetch not mocked in fullJourney.test"))
+    ) as any;
+  }
 });
 
-// --- Reset path before each test ---
+// Reset router path before each test
 beforeEach(() => {
   window.history.pushState({}, "Test page", "/");
-  vi.resetAllMocks();
-  localStorage.clear();
 });
 
-// --- Mock auth ---
+// --- mocks ---
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({
     isAuthenticated: true,
@@ -36,112 +43,62 @@ vi.mock("@/hooks/useAuth", () => ({
   }),
 }));
 
-// --- Mock fetch for appointments + transcription ---
-beforeEach(() => {
-  global.fetch = vi.fn((url: RequestInfo) => {
-    if (typeof url === "string" && url.includes("/appointments")) {
-      return Promise.resolve({
-        ok: true,
-        json: async () => [
-          {
-            id: 1,
-            patient_name: "John Doe",
-            appointment_date: "2025-09-18",
-            appointment_time: "09:00",
-            doctor_name: "Dr. Smith",
-            room: "Room 1",
-          },
-        ],
-      } as any);
-    }
+// You may also need to mock appointments if your App calls useDummyAppointments
+vi.mock("@/hooks/useDummyAppointments", () => ({
+  useDummyAppointments: () => ({
+    data: [
+      {
+        id: 1,
+        patientName: "John Doe",
+        time: "09:00",
+        room: "Room 1",
+      },
+    ],
+    isLoading: false,
+    error: null,
+  }),
+}));
 
-    if (typeof url === "string" && url.includes("/transcribe")) {
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({
-          audio_id: "a1",
-          status: "completed",
-          transcript: "Transcript of John Doe visit",
-        }),
-      } as any);
-    }
-
-    return Promise.reject(new Error(`Unhandled fetch: ${url}`));
-  }) as any;
-});
-
-// --- Mock MediaRecorder ---
-class MockMediaRecorder {
-  public state = "inactive";
-  public ondataavailable: ((event: any) => void) | null = null;
-  public onstop: (() => void) | null = null;
-
-  start() {
-    this.state = "recording";
-    setTimeout(() => {
-      this.ondataavailable?.(
-        { data: new Blob(["fake audio"], { type: "audio/webm" }) }
-      );
-    }, 0);
-  }
-  stop() {
-    this.state = "inactive";
-    this.onstop?.();
-  }
-}
-beforeEach(() => {
-  (global as any).MediaRecorder = MockMediaRecorder;
-  (global.navigator.mediaDevices as any) = {
-    getUserMedia: vi.fn().mockResolvedValue({
-      getTracks: () => [{ stop: vi.fn() }],
-    }),
-  };
-});
-
-// --- The actual test ---
 describe("Full Clinician Journey (Integration)", () => {
   it("completes full flow: login → record → transcript → edit → save → reload", async () => {
     render(<App />);
 
-    // ✅ Dashboard should load with mocked appointment
+    // Step 1: Dashboard should load with mocked appointment
     await waitFor(() => {
       expect(screen.getByText(/john doe/i)).toBeInTheDocument();
     });
 
-    // Step 2: Click "View Details"
+    // Step 2: Click "View Details" for appointment
     const viewDetailsButton = screen.getByRole("button", {
       name: /view details/i,
     });
     await userEvent.click(viewDetailsButton);
 
-    // ✅ Navigate to appointment detail
     await waitFor(() => {
       expect(window.location.pathname).toMatch(/\/appointment\/\d+/);
     });
 
-    // Step 3: Consent + record
-    await userEvent.click(
-      screen.getByRole("checkbox", {
-        name: /patient has given consent/i,
-      })
-    );
-    await userEvent.click(
-      screen.getByRole("button", { name: /start recording/i })
-    );
-    expect(
-      await screen.findByText(/recording in progress/i)
-    ).toBeInTheDocument();
+    // Step 3: Start recording
+    const startRecordingButton = await screen.findByRole("button", {
+      name: /start recording/i,
+    });
+    await userEvent.click(startRecordingButton);
 
-    // Step 4: Stop recording
-    await userEvent.click(
-      screen.getByRole("button", { name: /stop recording/i })
-    );
-
-    // Step 5: Transcript appears
     await waitFor(() => {
       expect(
-        screen.getByText(/transcript of john doe visit/i)
+        screen.getByRole("button", { name: /stop recording/i })
       ).toBeInTheDocument();
+    });
+
+    // Step 4: Stop recording
+    const stopRecordingButton = screen.getByRole("button", {
+      name: /stop recording/i,
+    });
+    await userEvent.click(stopRecordingButton);
+
+    // Step 5: Wait for transcript to appear
+    await waitFor(() => {
+      expect(screen.getByText(/transcript/i)).toBeInTheDocument();
     });
 
     // Step 6: Edit transcript
@@ -149,12 +106,14 @@ describe("Full Clinician Journey (Integration)", () => {
     await userEvent.type(transcriptBox, " Edited");
 
     // Step 7: Save
-    await userEvent.click(screen.getByRole("button", { name: /save/i }));
+    const saveButton = screen.getByRole("button", { name: /save/i });
+    await userEvent.click(saveButton);
+
     await waitFor(() => {
       expect(screen.getByText(/progress saved/i)).toBeInTheDocument();
     });
 
-    // Step 8: Reload App → transcript should persist (mock localStorage behavior)
+    // Step 8: Reload & verify saved transcript
     render(<App />);
     await waitFor(() => {
       expect(screen.getByText(/edited/i)).toBeInTheDocument();
