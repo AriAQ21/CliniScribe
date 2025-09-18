@@ -247,8 +247,8 @@ describe("Full Clinician Journey (Integration)", () => {
       };
     });
 
-    // Start at dashboard
-    const { rerender } = render(
+    // Start with both routes available in the router
+    const { container } = render(
       <MemoryRouter initialEntries={["/dashboard"]}>
         <Routes>
           <Route path="/dashboard" element={<Dashboard />} />
@@ -265,25 +265,22 @@ describe("Full Clinician Journey (Integration)", () => {
       { timeout: 5000 }
     );
 
-    // Navigate to appointment detail
+    // Navigate to appointment detail by clicking the button
+    // This should trigger React Router navigation
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /view details/i }));
     });
 
-    // Re-render with appointment detail route
-    rerender(
-      <MemoryRouter initialEntries={["/appointment/1"]}>
-        <Routes>
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/appointment/:id" element={<AppointmentDetail />} />
-        </Routes>
-      </MemoryRouter>
-    );
-
-    // Wait for appointment details to load
+    // Wait for navigation to appointment detail page and verify we're there
+    // Look for elements that are specific to the appointment detail page
     await waitFor(
       () => {
-        expect(screen.getByText(/john doe/i)).toBeInTheDocument();
+        // Should see "Appointment Details" heading instead of "Dashboard"
+        expect(screen.getByText(/appointment details/i)).toBeInTheDocument();
+        // Should see the consent checkbox
+        expect(screen.getByRole("checkbox", {
+          name: /patient has given consent for recording/i,
+        })).toBeInTheDocument();
       },
       { timeout: 5000 }
     );
@@ -349,15 +346,7 @@ describe("Full Clinician Journey (Integration)", () => {
       fireEvent.click(screen.getByRole("button", { name: /save/i }));
     });
 
-    // --- Reload page → transcript still shown ---
-    rerender(
-      <MemoryRouter initialEntries={["/appointment/1"]}>
-        <Routes>
-          <Route path="/appointment/:id" element={<AppointmentDetail />} />
-        </Routes>
-      </MemoryRouter>
-    );
-
+    // Wait for save to complete and edited text to appear
     await waitFor(
       () => {
         expect(screen.getByText(/edited transcript text/i)).toBeInTheDocument();
