@@ -4,12 +4,10 @@ import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { vi, describe, it, beforeEach, expect } from "vitest";
 
 import AuthPage from "@/pages/AuthPage";
-import Dashboard from "@/pages/Index";
+import Dashboard from "@/pages/Dashboard";
 
-// --- Mocks ---
+// --- Mock react-router navigation ---
 const mockNavigate = vi.fn();
-
-// mock react-router navigation
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>(
     "react-router-dom"
@@ -20,19 +18,24 @@ vi.mock("react-router-dom", async () => {
   };
 });
 
-// mock Supabase client (all inside factory)
-let mockSelect: any;
-let mockFrom: any;
-
+// --- Mock Supabase client safely ---
 vi.mock("@/integrations/supabase/client", () => {
-  mockSelect = vi.fn();
+  const mockSelect = vi.fn();
   const mockEq = vi.fn(() => ({ single: mockSelect }));
-  mockFrom = vi.fn(() => ({ select: vi.fn(() => ({ eq: mockEq })) }));
+  const mockFrom = vi.fn(() => ({ select: vi.fn(() => ({ eq: mockEq })) }));
 
   return {
     supabase: { from: mockFrom },
+    // expose mocks so we can configure them later
+    __mocks: { mockSelect, mockEq, mockFrom },
   };
 });
+
+// Access mocks after import
+const { __mocks } = await vi.importMock<any>(
+  "@/integrations/supabase/client"
+);
+const { mockSelect, mockFrom } = __mocks;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -41,7 +44,6 @@ beforeEach(() => {
 
 describe("Authentication flow (integration)", () => {
   it("logs in successfully and shows dashboard", async () => {
-    // Mock Supabase user query
     mockSelect.mockResolvedValueOnce({
       data: {
         user_id: 1,
@@ -71,12 +73,9 @@ describe("Authentication flow (integration)", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
-    // After login, navigate("/dashboard") should be called
     await waitFor(() =>
       expect(mockNavigate).toHaveBeenCalledWith("/dashboard")
     );
-
-    // And dashboard should render
     expect(await screen.findByText(/dashboard/i)).toBeInTheDocument();
   });
 
@@ -94,7 +93,6 @@ describe("Authentication flow (integration)", () => {
     await waitFor(() =>
       expect(mockNavigate).toHaveBeenCalledWith("/auth")
     );
-
     expect(localStorage.getItem("user_id")).toBeNull();
   });
 });
