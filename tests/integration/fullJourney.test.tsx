@@ -21,6 +21,16 @@ beforeEach(() => {
   window.history.pushState({}, "Test page", "/");
 });
 
+// --- mocks ---
+vi.mock("@/hooks/useAuth", () => ({
+  useAuth: () => ({
+    isAuthenticated: true,
+    loading: false,
+    user: { user_id: 1, email: "test@email.com" },
+  }),
+}));
+
+
 describe("Full Clinician Journey (Integration)", () => {
   it("completes full flow: login → record → transcript → edit → save → reload", async () => {
     render(<App />);
