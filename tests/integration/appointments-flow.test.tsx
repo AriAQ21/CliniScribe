@@ -27,29 +27,33 @@ vi.mock("@/hooks/useAppointments", () => ({
 }));
 
 vi.mock("@/hooks/useAppointmentDetails", () => ({
-  useAppointmentDetails: (id: string) => {
-    if (id === "1") {
-      return {
-        appointment: {
-          id: "1",
-          patient_name: "John Doe",
-          doctor_name: "Dr. Smith",
-          room: "Room 101",
-          appointment_date: "2025-08-19",
-          appointment_time: "09:00",
-          user_id: 123,
-        },
-        patientData: {
-          name: "John Doe",
-          dateOfBirth: "01/01/1970",
-          nhsNumber: "1234567890",
-        },
-        loading: false,
-        error: null,
-      };
-    }
-    return { appointment: null, patientData: null, loading: false, error: "Not found" };
-  },
+  useAppointmentDetails: () => ({
+    appointment: {
+      appointment_id: 1,
+      patient_name: "John Doe",
+      doctor_name: "Dr. Smith",
+      room: "Room 101",
+      appointment_date: "2025-08-19",
+      appointment_time: "09:00",
+      user_id: 123,
+    },
+    patientData: {
+      name: "John Doe",
+      dateOfBirth: "01/01/1970",
+      nhsNumber: "1234567890",
+      time: "9:00 AM",
+    },
+    loading: false,
+    error: null,
+  }),
+}));
+
+
+vi.mock("@/hooks/useAppointmentStatus", () => ({
+  useAppointmentStatus: () => ({
+    status: "Not started",
+    loading: false,
+  }),
 }));
 
 vi.mock("@/hooks/useTranscription", () => ({
@@ -62,14 +66,6 @@ vi.mock("@/hooks/useTranscription", () => ({
     handleSaveTranscription: vi.fn(),
     handleCancelEdit: vi.fn(),
     setTranscriptionText: vi.fn(),
-  }),
-}));
-
-// Mock useAppointmentStatus so DynamicAppointmentCard works
-vi.mock("@/hooks/useAppointmentStatus", () => ({
-  useAppointmentStatus: () => ({
-    status: "Not started",
-    loading: false,
   }),
 }));
 
