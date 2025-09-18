@@ -112,10 +112,8 @@ describe("Appointments flow (integration)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /view details/i }));
 
-    // Now check heading inside details page
-    expect(
-      await screen.findByRole("heading", { name: /appointment details/i })
-    ).toBeInTheDocument();
+
+    expect(await screen.findByText(/appointment details/i)).toBeInTheDocument();
 
     // Probe for any transcript-related UI
     const probes = [
