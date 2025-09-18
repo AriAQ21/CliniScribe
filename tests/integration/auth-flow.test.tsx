@@ -1,3 +1,4 @@
+// tests/integration/auth-flow.test.tsx
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi, describe, it, beforeEach, expect } from "vitest";
@@ -14,15 +15,23 @@ vi.mock("react-router-dom", async () => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
-// --- Inline Supabase mock ---
+// --- Inline Supabase mock (self-contained) ---
 const mockSingle = vi.fn();
-const mockEq = vi.fn(() => ({ eq: mockEq, single: mockSingle }));
-const mockSelect = vi.fn(() => ({ eq: mockEq, single: mockSingle }));
-const mockFrom = vi.fn(() => ({ select: mockSelect }));
+vi.mock("@/integrations/supabase/client", () => {
+  const mockEq = vi.fn(() => ({ eq: mockEq, single: mockSingle }));
+  const mockSelect = vi.fn(() => ({ eq: mockEq, single: mockSingle }));
+  const mockFrom = vi.fn(() => ({ select: mockSelect }));
+  return {
+    supabase: { from: mockFrom },
+    __mocks: { mockFrom, mockSelect, mockEq, mockSingle },
+  };
+});
 
-vi.mock("@/integrations/supabase/client", () => ({
-  supabase: { from: mockFrom },
-}));
+// pull out the mocks so we can use them
+const { __mocks } = vi.mocked(
+  await import("@/integrations/supabase/client")
+);
+const { mockSingle } = __mocks;
 
 describe("Authentication flow (integration)", () => {
   beforeEach(() => {
@@ -31,7 +40,6 @@ describe("Authentication flow (integration)", () => {
   });
 
   it("logs in successfully and navigates to dashboard", async () => {
-    // make supabase return a user
     mockSingle.mockResolvedValueOnce({
       data: {
         user_id: 1,
