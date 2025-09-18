@@ -7,7 +7,7 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi, describe, it, beforeEach, expect } from "vitest";
 import AppointmentDetail from "@/pages/AppointmentDetail";
-import Dashboard from "@/pages/Dashboard";
+import Dashboard from "@/pages/Index";
 import { AppointmentImportDialog } from "@/components/AppointmentImportDialog";
 
 // Mock auth so user exists
