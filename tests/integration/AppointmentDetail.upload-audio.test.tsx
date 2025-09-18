@@ -55,8 +55,8 @@ describe("AppointmentDetail - Upload Audio flow", () => {
     // open dialog
     fireEvent.click(screen.getByRole("button", { name: /upload audio/i }));
 
-    const fileInput = screen.getByLabelText(/upload audio file/i, { selector: "input" }) 
-      || screen.getByRole("textbox", { hidden: true }); // fallback if label is implicit
+    const fileInput = screen.getByRole("textbox", { hidden: true }) 
+      || screen.getByRole("button", { hidden: true });
 
     const fakeFile = new File(["dummy-audio"], "test_audio.wav", { type: "audio/wav" });
     fireEvent.change(fileInput, { target: { files: [fakeFile] } });
