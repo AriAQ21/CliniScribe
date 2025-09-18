@@ -14,26 +14,28 @@ vi.mock("react-router-dom", async () => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
-// Declare variables to hold mock fns
+// Hold references to mocks
 let mockSingle: ReturnType<typeof vi.fn>;
 let mockFrom: ReturnType<typeof vi.fn>;
 
-// Mock supabase dynamically so it only applies in this file
+// Supabase mock
 vi.doMock("@/integrations/supabase/client", () => {
   mockSingle = vi.fn();
   const mockEq = vi.fn(() => ({ eq: mockEq, single: mockSingle }));
   const mockSelect = vi.fn(() => ({ eq: mockEq }));
   mockFrom = vi.fn(() => ({ select: mockSelect }));
 
-  return {
-    supabase: { from: mockFrom },
-  };
+  return { supabase: { from: mockFrom } };
 });
 
 describe("Authentication flow (integration)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+
+    // Re-initialize Supabase mock for each test
+    mockSingle.mockReset();
+    mockFrom.mockReset();
   });
 
   it("logs in successfully and navigates to dashboard", async () => {
@@ -66,9 +68,9 @@ describe("Authentication flow (integration)", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
-    await waitFor(() =>
-      expect(mockNavigate).toHaveBeenCalledWith("/dashboard")
-    );
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith("/dashboard");
+    });
   });
 
   it("logs out successfully and navigates to auth page", async () => {
@@ -83,8 +85,8 @@ describe("Authentication flow (integration)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /logout/i }));
 
-    await waitFor(() =>
-      expect(mockNavigate).toHaveBeenCalledWith("/auth")
-    );
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith("/auth");
+    });
   });
 });
