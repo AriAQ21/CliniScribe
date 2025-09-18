@@ -98,11 +98,12 @@ describe("Appointments flow (integration)", () => {
     expect(screen.getByText("John Doe")).toBeInTheDocument();
   });
 
-  it("user can navigate to appointment details and see transcript placeholder", () => {
+  it("user can navigate to appointment details and see transcript placeholder", async () => {
     render(<AppUnderTest />);
 
     fireEvent.click(screen.getByText("View Details"));
 
+    // wait for heading
     expect(
       await screen.findByRole("heading", { name: /Appointment Details/i })
     ).toBeInTheDocument();
