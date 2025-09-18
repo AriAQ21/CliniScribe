@@ -14,13 +14,16 @@ vi.mock("react-router-dom", async () => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
-// Supabase mock
+// Supabase mock (chain-friendly)
 vi.mock("@/integrations/supabase/client", () => {
   const mockSingle = vi.fn();
   const mockEq = vi.fn(() => ({ eq: mockEq, single: mockSingle }));
-  // 👇 make mockSelect return both eq + single
   const mockSelect = vi.fn(() => ({ eq: mockEq, single: mockSingle }));
-  const mockFrom = vi.fn(() => ({ select: mockSelect }));
+  const mockFrom = vi.fn(() => ({
+    select: mockSelect,
+    eq: mockEq,
+    single: mockSingle,
+  }));
 
   return {
     supabase: { from: mockFrom },
@@ -35,7 +38,7 @@ describe("Authentication flow (integration)", () => {
     vi.clearAllMocks();
     localStorage.clear();
 
-    // Import fresh mocks every time
+    // Get fresh mock references each test
     const { __mocks } = await import("@/integrations/supabase/client");
     mockSingle = __mocks.mockSingle;
   });
