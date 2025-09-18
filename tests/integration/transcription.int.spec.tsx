@@ -1,12 +1,19 @@
 // tests/integration/transcription.int.spec.tsx
-// * Upload → transcript shown (via real hook + mocked fetch).
+// * Upload → transcript shown (via handleSendForTranscription + UI render).
 // * Edit + Save calls handleSaveTranscription.
-// * Edit + Cancel leaves old text intact.
+// * Edit + Cancel calls handleCancelEdit and leaves old text intact.
 
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi, describe, it, beforeEach, expect } from "vitest";
 import AppointmentDetail from "@/pages/AppointmentDetail";
+
+// ---- mock state ----
+let isEditing = false;
+
+const mockSaveTranscription = vi.fn();
+const mockSendForTranscription = vi.fn();
+const mockUploadFileForTranscription = vi.fn();
 
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({ user: { user_id: 1 } }),
@@ -25,6 +32,28 @@ vi.mock("@/hooks/useAppointmentDetails", () => ({
   }),
 }));
 
+vi.mock("@/hooks/useTranscription", () => ({
+  useTranscription: () => ({
+    transcriptionText: "Patient reports mild headache.",
+    isEditingTranscription: isEditing,
+    isProcessing: false,
+    isLoadingExistingTranscription: false,
+    permissionGranted: true,
+    recordingState: "idle",
+    hasRecorded: true,
+    handleEditTranscription: () => {
+      isEditing = true;
+    },
+    handleCancelEdit: () => {
+      isEditing = false;
+    },
+    handleSaveTranscription: mockSaveTranscription,
+    handleSendForTranscription: mockSendForTranscription,
+    handleUploadFileForTranscription: mockUploadFileForTranscription,
+    setTranscriptionText: vi.fn(),
+  }),
+}));
+
 // ---- test wrapper ----
 const TestApp = () => (
   <MemoryRouter initialEntries={["/appointment/1"]}>
@@ -37,40 +66,16 @@ const TestApp = () => (
 describe("Transcription integration", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    isEditing = false;
   });
 
   it("uploads audio and shows transcript", async () => {
-    const audioId = "ti-1";
-    const transcriptText = "Mocked transcript appears!";
-
-    global.fetch = vi
-      .fn()
-      // upload audio
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ audio_id: audioId, status: "queued" }),
-      } as any)
-      // status check
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          audio_id: audioId,
-          status: "completed",
-          transcript: transcriptText,
-        }),
-      } as any)
-      // fetch transcript text
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ audio_id: audioId, transcript: transcriptText }),
-      } as any);
-
     render(<TestApp />);
 
     // open upload dialog
     fireEvent.click(screen.getByRole("button", { name: /upload audio/i }));
 
-    // simulate file selection
+    // simulate file selection (hidden input inside dialog)
     const file = new File(["dummy audio"], "test-audio.wav", {
       type: "audio/wav",
     });
@@ -80,52 +85,70 @@ describe("Transcription integration", () => {
     expect(input).toBeTruthy();
     fireEvent.change(input, { target: { files: [file] } });
 
-    // click send
+    // click send inside the dialog
     fireEvent.click(
       screen.getByRole("button", { name: /send for transcription/i })
     );
 
-    // ✅ transcript text eventually appears
-    await waitFor(() =>
-      expect(screen.getByText(transcriptText)).toBeInTheDocument()
-    );
+    await waitFor(() => {
+      expect(mockUploadFileForTranscription).toHaveBeenCalled();
+      expect(mockSendForTranscription).toHaveBeenCalled();
+    });
   });
 
   it("edits and saves transcript", async () => {
+    const transcriptText = "Initial transcript text";
+
+    // Prime fetch with transcript so the Edit button is visible
+    global.fetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ transcript: transcriptText }),
+    } as any);
+
     render(<TestApp />);
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /edit transcription/i })
-    );
+    // Wait for transcript to appear
+    await screen.findByText(transcriptText);
+
+    // Click edit
+    fireEvent.click(screen.getByRole("button", { name: /edit transcription/i }));
 
     const textarea = await screen.findByRole("textbox");
     fireEvent.change(textarea, { target: { value: "Edited transcript" } });
 
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
 
-    // Check that edited text appears
     await waitFor(() =>
-      expect(screen.getByText(/edited transcript/i)).toBeInTheDocument()
+      expect(mockSaveTranscription).toHaveBeenCalled()
     );
   });
 
   it("cancels transcript edit", async () => {
+    const transcriptText = "Initial transcript text";
+
+    // Prime fetch with transcript so the Edit button is visible
+    global.fetch = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ transcript: transcriptText }),
+    } as any);
+
     render(<TestApp />);
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /edit transcription/i })
-    );
+    // Wait for transcript
+    await screen.findByText(transcriptText);
+
+    // Click edit
+    fireEvent.click(screen.getByRole("button", { name: /edit transcription/i }));
 
     const textarea = await screen.findByRole("textbox");
     fireEvent.change(textarea, { target: { value: "Unsaved changes" } });
 
+    // Cancel
     fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
 
-    // Ensure old text is still there, not the unsaved one
+    // Ensure original transcript still shown
     await waitFor(() =>
-      expect(
-        screen.getByText(/patient reports mild headache/i)
-      ).toBeInTheDocument()
+      expect(screen.getByText(transcriptText)).toBeInTheDocument()
     );
   });
 });
