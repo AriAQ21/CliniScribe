@@ -134,4 +134,5 @@ describe("Appointments flow (integration)", () => {
   );
   expect(found).toBe(true);
 });
+});
 
