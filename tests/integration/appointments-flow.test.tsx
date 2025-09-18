@@ -65,6 +65,14 @@ vi.mock("@/hooks/useTranscription", () => ({
   }),
 }));
 
+// Mock useAppointmentStatus so DynamicAppointmentCard works
+vi.mock("@/hooks/useAppointmentStatus", () => ({
+  useAppointmentStatus: () => ({
+    status: "Not started",
+    loading: false,
+  }),
+}));
+
 // --- Test wrapper ---
 const AppUnderTest = () => (
   <MemoryRouter initialEntries={["/dashboard"]}>
@@ -106,17 +114,14 @@ describe("Appointments flow (integration)", () => {
   it("user can navigate to appointment details and see transcript placeholder", async () => {
     render(<AppUnderTest />);
 
-    // Navigate into details page
     fireEvent.click(screen.getByRole("button", { name: /view details/i }));
 
-    // Match heading text flexibly (since there's an icon next to it)
+    // Now check heading inside details page
     expect(
-      await screen.findByText((content, node) =>
-        node?.textContent?.includes("Appointment Details")
-      )
+      await screen.findByRole("heading", { name: /appointment details/i })
     ).toBeInTheDocument();
 
-    // Probe for any transcription-related UI
+    // Probe for any transcript-related UI
     const probes = [
       /consent/i,
       /start recording/i,
