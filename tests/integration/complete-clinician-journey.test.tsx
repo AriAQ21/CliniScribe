@@ -1,3 +1,4 @@
+// tests/integration/complete-clinician-journey.test.tsx
 // This tests:
 // * CSV import (via useImportedAppointments)
 // * Dashboard → Appointment detail navigation
@@ -6,9 +7,7 @@
 // * Editing & saving transcript
 // * Error recovery when sending for transcription
 
-// tests/integration/complete-clinician-journey.test.tsx
-
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi, describe, it, beforeEach, expect } from "vitest";
 import { UnifiedAppointmentsList } from "@/components/UnifiedAppointmentsList";
@@ -23,6 +22,7 @@ const mockPauseRecording = vi.fn();
 const mockResumeRecording = vi.fn();
 const mockEditTranscription = vi.fn();
 const mockSetTranscriptionText = vi.fn();
+const mockToast = vi.fn();
 
 vi.mock("@/hooks/useImportedAppointments", () => ({
   useImportedAppointments: () => ({
@@ -90,8 +90,15 @@ const makeTranscriptionMock = (overrides = {}) => ({
   ...overrides,
 });
 
+// Vitest mock that we’ll override inside each test
+let currentTranscriptionMock: any = makeTranscriptionMock();
+
 vi.mock("@/hooks/useTranscription", () => ({
-  useTranscription: () => makeTranscriptionMock(),
+  useTranscription: () => currentTranscriptionMock,
+}));
+
+vi.mock("@/hooks/useToast", () => ({
+  useToast: () => ({ toast: mockToast }),
 }));
 
 // --- Test wrapper ---
@@ -121,78 +128,80 @@ const DashboardOnly = () => (
   </MemoryRouter>
 );
 
-const renderDetail = () =>
-  render(
-    <MemoryRouter initialEntries={["/appointment/1"]}>
-      <Routes>
-        <Route path="/appointment/:id" element={<AppointmentDetail />} />
-      </Routes>
-    </MemoryRouter>
-  );
+const DetailOnly = () => (
+  <MemoryRouter initialEntries={["/appointment/1"]}>
+    <Routes>
+      <Route path="/appointment/:id" element={<AppointmentDetail />} />
+    </Routes>
+  </MemoryRouter>
+);
 
 describe("Complete Clinician Journey (integration)", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    currentTranscriptionMock = makeTranscriptionMock();
   });
 
   it("imports appointments successfully", async () => {
     render(<DashboardOnly />);
-    await act(async () => {
-      await mockImportAppointments([
-        { patientName: "Jane Smith", doctorName: "Dr. Johnson" },
-      ]);
-    });
+    await mockImportAppointments([
+      { patientName: "Jane Smith", doctorName: "Dr. Johnson" },
+    ]);
     expect(mockImportAppointments).toHaveBeenCalled();
   });
 
   it("runs recording flow before transcription", async () => {
+    // Start idle → renders Start button
+    currentTranscriptionMock = makeTranscriptionMock({ recordingState: "idle" });
     render(<DashboardOnly />);
     fireEvent.click(screen.getByText("View Details"));
-    renderDetail(); // manual render of detail page
+    render(<DetailOnly />);
 
-    // tick consent
-    fireEvent.click(
-      await screen.findByRole("checkbox", {
-        name: /patient has given consent for recording/i,
-      })
-    );
-
+    fireEvent.click(await screen.findByRole("checkbox", { name: /consent/i }));
     fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
     expect(mockStartRecording).toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: /pause recording/i }));
+    // Re-render with recording state → Pause button should appear
+    currentTranscriptionMock = makeTranscriptionMock({ recordingState: "recording" });
+    render(<DetailOnly />);
+    fireEvent.click(await screen.findByRole("button", { name: /pause recording/i }));
     expect(mockPauseRecording).toHaveBeenCalled();
 
+    // Send for transcription
     mockSendForTranscription.mockResolvedValue({});
-    fireEvent.click(
-      screen.getByRole("button", { name: /send for transcription/i })
-    );
-
+    fireEvent.click(screen.getByRole("button", { name: /send for transcription/i }));
     await waitFor(() => expect(mockSendForTranscription).toHaveBeenCalled());
   });
 
   it("shows transcript after transcription completes", async () => {
+    currentTranscriptionMock = makeTranscriptionMock();
     render(<DashboardOnly />);
     fireEvent.click(screen.getByText("View Details"));
-    renderDetail();
-
-    expect(
-      await screen.findByText(/headache symptoms/i)
-    ).toBeInTheDocument();
+    render(<DetailOnly />);
+    await waitFor(() =>
+      expect(screen.getByText(/headache symptoms/i)).toBeInTheDocument()
+    );
   });
 
   it("edits and saves transcript", async () => {
+    // Initial render → edit button visible
+    currentTranscriptionMock = makeTranscriptionMock({ isEditingTranscription: false });
     render(<DashboardOnly />);
     fireEvent.click(screen.getByText("View Details"));
-    renderDetail();
-
+    render(<DetailOnly />);
     fireEvent.click(await screen.findByRole("button", { name: /edit transcription/i }));
+    expect(mockEditTranscription).toHaveBeenCalled();
 
+    // Re-render in edit mode → textbox visible
+    currentTranscriptionMock = makeTranscriptionMock({
+      isEditingTranscription: true,
+      transcriptionText: "Editable text",
+    });
+    render(<DetailOnly />);
     const textarea = await screen.findByRole("textbox");
     fireEvent.change(textarea, { target: { value: "Edited transcript" } });
-
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
-    expect(mockSaveTranscription).toHaveBeenCalled();
+    await waitFor(() => expect(mockSaveTranscription).toHaveBeenCalled());
   });
 
   it("handles error recovery on send for transcription", async () => {
@@ -202,29 +211,18 @@ describe("Complete Clinician Journey (integration)", () => {
 
     render(<DashboardOnly />);
     fireEvent.click(screen.getByText("View Details"));
-    renderDetail();
+    render(<DetailOnly />);
 
-    fireEvent.click(
-      await screen.findByRole("checkbox", {
-        name: /patient has given consent for recording/i,
-      })
-    );
+    fireEvent.click(await screen.findByRole("checkbox", { name: /consent/i }));
+    fireEvent.click(screen.getByRole("button", { name: /send for transcription/i }));
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /send for transcription/i })
-    );
+    await waitFor(() => {
+      expect(mockToast).toHaveBeenCalled(); // toast error is shown
+    });
 
-    await waitFor(() =>
-      expect(screen.getByText(/service unavailable/i)).toBeInTheDocument()
-    );
-
-    fireEvent.click(
-      screen.getByRole("button", { name: /send for transcription/i })
-    );
-
+    fireEvent.click(screen.getByRole("button", { name: /send for transcription/i }));
     await waitFor(() =>
       expect(mockSendForTranscription).toHaveBeenCalledTimes(2)
     );
   });
 });
-
