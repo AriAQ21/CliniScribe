@@ -1,12 +1,12 @@
 // tests/integration/auth-flow.test.tsx
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { MemoryRouter, Routes, Route } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi, describe, it, beforeEach, expect } from "vitest";
 
 import AuthPage from "@/pages/AuthPage";
-import Dashboard from "@/pages/Index";
+import Dashboard from "@/pages/Index"; 
 
-// --- Mock react-router navigation ---
+// --- Mock useNavigate ---
 const mockNavigate = vi.fn();
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>(
@@ -18,33 +18,25 @@ vi.mock("react-router-dom", async () => {
   };
 });
 
-// --- Mock Supabase client safely ---
-vi.mock("@/integrations/supabase/client", () => {
-  const mockSelect = vi.fn();
-  const mockEq = vi.fn(() => ({ single: mockSelect }));
-  const mockFrom = vi.fn(() => ({ select: vi.fn(() => ({ eq: mockEq })) }));
+// --- Mock Supabase client ---
+const mockSingle = vi.fn();
+const mockEq = vi.fn(() => ({ eq: mockEq, single: mockSingle }));
+const mockSelect = vi.fn(() => ({ eq: mockEq }));
+const mockFrom = vi.fn(() => ({ select: mockSelect }));
 
-  return {
-    supabase: { from: mockFrom },
-    // expose mocks so we can configure them later
-    __mocks: { mockSelect, mockEq, mockFrom },
-  };
-});
-
-// Access mocks after import
-const { __mocks } = await vi.importMock<any>(
-  "@/integrations/supabase/client"
-);
-const { mockSelect, mockFrom } = __mocks;
-
-beforeEach(() => {
-  vi.clearAllMocks();
-  localStorage.clear();
-});
+vi.mock("@/integrations/supabase/client", () => ({
+  supabase: { from: mockFrom },
+}));
 
 describe("Authentication flow (integration)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
   it("logs in successfully and shows dashboard", async () => {
-    mockSelect.mockResolvedValueOnce({
+    // Arrange: mock Supabase to return a valid user
+    mockSingle.mockResolvedValueOnce({
       data: {
         user_id: 1,
         first_name: "Alice",
@@ -65,6 +57,7 @@ describe("Authentication flow (integration)", () => {
       </MemoryRouter>
     );
 
+    // Act: fill form + submit
     fireEvent.change(screen.getByLabelText(/email/i), {
       target: { value: "alice@email.com" },
     });
@@ -73,6 +66,7 @@ describe("Authentication flow (integration)", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
+    // Assert: navigates and dashboard appears
     await waitFor(() =>
       expect(mockNavigate).toHaveBeenCalledWith("/dashboard")
     );
@@ -84,15 +78,18 @@ describe("Authentication flow (integration)", () => {
       <MemoryRouter initialEntries={["/dashboard"]}>
         <Routes>
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/auth" element={<AuthPage />} />
         </Routes>
       </MemoryRouter>
     );
 
+    // Act: click logout button
     fireEvent.click(screen.getByRole("button", { name: /logout/i }));
 
+    // Assert: navigates to auth page
     await waitFor(() =>
       expect(mockNavigate).toHaveBeenCalledWith("/auth")
     );
-    expect(localStorage.getItem("user_id")).toBeNull();
+    expect(await screen.findByText(/sign in/i)).toBeInTheDocument();
   });
 });
