@@ -1,38 +1,54 @@
 // tests/integration/auth-flow.test.tsx
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
-import AuthPage from "@/pages/AuthPage";
-import Dashboard from "@/pages/Index"; 
+import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { vi, describe, it, beforeEach, expect } from "vitest";
 
-// --- Mock backend fetch calls ---
+import AuthPage from "@/pages/AuthPage";
+import Dashboard from "@/pages/Dashboard";
+
+// --- Mocks ---
+const mockNavigate = vi.fn();
+
+// mock react-router navigation
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual<typeof import("react-router-dom")>(
+    "react-router-dom"
+  );
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+  };
+});
+
+// mock Supabase client
+const mockSelect = vi.fn();
+const mockEq = vi.fn(() => ({ single: mockSelect }));
+const mockFrom = vi.fn(() => ({ select: vi.fn(() => ({ eq: mockEq })) }));
+
+vi.mock("@/integrations/supabase/client", () => ({
+  supabase: { from: mockFrom },
+}));
+
 beforeEach(() => {
-  vi.resetAllMocks();
-
-  global.fetch = vi.fn((url, options) => {
-    if (url.includes("/login")) {
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({
-          user: { id: 1, email: "alice@email.com" },
-          token: "fake-jwt",
-        }),
-      }) as any;
-    }
-
-    if (url.includes("/logout")) {
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({ success: true }),
-      }) as any;
-    }
-
-    return Promise.reject(new Error("Unhandled fetch: " + url));
-  }) as any;
+  vi.clearAllMocks();
+  localStorage.clear();
 });
 
 describe("Authentication flow (integration)", () => {
   it("logs in successfully and shows dashboard", async () => {
+    // Mock Supabase user query
+    mockSelect.mockResolvedValueOnce({
+      data: {
+        user_id: 1,
+        first_name: "Alice",
+        last_name: "Doe",
+        email: "alice@email.com",
+        role: "doctor",
+        location: "Room 1",
+      },
+      error: null,
+    });
+
     render(
       <MemoryRouter initialEntries={["/auth"]}>
         <Routes>
@@ -42,50 +58,38 @@ describe("Authentication flow (integration)", () => {
       </MemoryRouter>
     );
 
-    // Fill out form
     fireEvent.change(screen.getByLabelText(/email/i), {
       target: { value: "alice@email.com" },
     });
     fireEvent.change(screen.getByLabelText(/password/i), {
       target: { value: "password" },
     });
-
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
-    // Wait until dashboard appears
-    expect(
-      await screen.findByText(/welcome|dashboard/i)
-    ).toBeInTheDocument();
-
-    // Sanity check: backend called with right args
-    expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringMatching(/\/login$/),
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({
-          email: "alice@email.com",
-          password: "password",
-        }),
-      })
+    // After login, navigate("/dashboard") should be called
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith("/dashboard")
     );
+
+    // And dashboard should render
+    expect(await screen.findByText(/dashboard/i)).toBeInTheDocument();
   });
 
-  it("logs out successfully", async () => {
+  it("logs out successfully and navigates to auth page", async () => {
     render(
       <MemoryRouter initialEntries={["/dashboard"]}>
         <Routes>
-          <Route path="/dashboard" element={<button>Logout</button>} />
+          <Route path="/dashboard" element={<Dashboard />} />
         </Routes>
       </MemoryRouter>
     );
 
-    fireEvent.click(screen.getByText(/logout/i));
+    fireEvent.click(screen.getByRole("button", { name: /logout/i }));
 
     await waitFor(() =>
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringMatching(/\/logout$/),
-        expect.objectContaining({ method: "POST" })
-      )
+      expect(mockNavigate).toHaveBeenCalledWith("/auth")
     );
+
+    expect(localStorage.getItem("user_id")).toBeNull();
   });
 });
