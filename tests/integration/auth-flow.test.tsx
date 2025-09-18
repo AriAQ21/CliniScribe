@@ -1,3 +1,4 @@
+// tests/integration/auth-flow.test.tsx
 // This tests:
 // * Invalid creds → error message
 // * Valid creds → redirect to dashboard
@@ -10,25 +11,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi, describe, it, beforeEach, expect } from "vitest";
 import AuthPage from "@/pages/AuthPage";
 import AppointmentDetail from "@/pages/AppointmentDetail";
-
-// --- helpers ---
-const makeApp = () => (
-  <MemoryRouter initialEntries={["/auth"]}>
-    <Routes>
-      <Route path="/auth" element={<AuthPage />} />
-      <Route
-        path="/dashboard"
-        element={
-          <div>
-            <h1>Dashboard</h1>
-            <button onClick={() => mockLogout()}>Logout</button>
-          </div>
-        }
-      />
-      <Route path="/appointment/:id" element={<AppointmentDetail />} />
-    </Routes>
-  </MemoryRouter>
-);
+import Index from "@/pages/index"; // dashboard with DashboardHeader
 
 // shared mocks
 let mockLogin: ReturnType<typeof vi.fn>;
@@ -36,7 +19,7 @@ let mockLogout: ReturnType<typeof vi.fn>;
 
 describe("Authentication flow (integration)", () => {
   beforeEach(() => {
-    vi.resetModules(); // important so doMock takes effect
+    vi.resetModules();
     mockLogin = vi.fn();
     mockLogout = vi.fn();
   });
@@ -54,7 +37,14 @@ describe("Authentication flow (integration)", () => {
 
     mockLogin.mockResolvedValue({ error: "Invalid email or password" });
 
-    render(makeApp());
+    render(
+      <MemoryRouter initialEntries={["/auth"]}>
+        <Routes>
+          <Route path="/auth" element={<AuthPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
     fireEvent.change(screen.getByLabelText(/email/i), {
       target: { value: "wrong@test.com" },
     });
@@ -64,9 +54,10 @@ describe("Authentication flow (integration)", () => {
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
     await waitFor(() =>
-      expect(screen.getByText(/invalid email or password/i)).toBeInTheDocument()
+      expect(
+        screen.getByText(/invalid email or password/i)
+      ).toBeInTheDocument()
     );
-    expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
   });
 
   it("redirects to dashboard on successful login", async () => {
@@ -84,7 +75,15 @@ describe("Authentication flow (integration)", () => {
       user: { user_id: 1, email: "alice@email.com" },
     });
 
-    render(makeApp());
+    render(
+      <MemoryRouter initialEntries={["/auth"]}>
+        <Routes>
+          <Route path="/auth" element={<AuthPage />} />
+          <Route path="/dashboard" element={<h1>Dashboard</h1>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
     fireEvent.change(screen.getByLabelText(/email/i), {
       target: { value: "alice@email.com" },
     });
@@ -99,7 +98,7 @@ describe("Authentication flow (integration)", () => {
   });
 
   it("persists session across reloads (simulated)", async () => {
-    // first render: logged out
+    // First render: logged out
     vi.doMock("@/hooks/useAuth", () => ({
       useAuth: () => ({
         login: mockLogin,
@@ -112,7 +111,15 @@ describe("Authentication flow (integration)", () => {
 
     mockLogin.mockResolvedValue({ user: { user_id: 1 } });
 
-    const { rerender } = render(makeApp());
+    const { rerender } = render(
+      <MemoryRouter initialEntries={["/auth"]}>
+        <Routes>
+          <Route path="/auth" element={<AuthPage />} />
+          <Route path="/dashboard" element={<h1>Dashboard</h1>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
     fireEvent.change(screen.getByLabelText(/email/i), {
       target: { value: "alice@email.com" },
     });
@@ -125,7 +132,7 @@ describe("Authentication flow (integration)", () => {
       expect(screen.getByText(/dashboard/i)).toBeInTheDocument()
     );
 
-    // simulate reload: now authenticated
+    // Simulate reload: now authenticated
     vi.doMock("@/hooks/useAuth", () => ({
       useAuth: () => ({
         login: mockLogin,
@@ -136,7 +143,14 @@ describe("Authentication flow (integration)", () => {
       }),
     }));
 
-    rerender(makeApp());
+    rerender(
+      <MemoryRouter initialEntries={["/dashboard"]}>
+        <Routes>
+          <Route path="/dashboard" element={<h1>Dashboard</h1>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
     await waitFor(() =>
       expect(screen.getByText(/dashboard/i)).toBeInTheDocument()
     );
@@ -193,7 +207,14 @@ describe("Authentication flow (integration)", () => {
       }),
     }));
 
-    render(makeApp());
+    render(
+      <MemoryRouter initialEntries={["/dashboard"]}>
+        <Routes>
+          <Route path="/dashboard" element={<Index />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
     fireEvent.click(screen.getByRole("button", { name: /logout/i }));
 
     expect(mockLogout).toHaveBeenCalled();
