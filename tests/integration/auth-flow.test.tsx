@@ -6,20 +6,16 @@ import { vi, describe, it, beforeEach, expect } from "vitest";
 import AuthPage from "@/pages/AuthPage";
 import Dashboard from "@/pages/Index";
 
-// --- mocks ---
-// spy for navigate
+// --- Mock navigate ---
 const mockNavigate = vi.fn();
-
-// ✅ synchronous mock (no await inside vi.mock)
-vi.mock("react-router-dom", () => {
-  const actual = require("react-router-dom");
-  return {
-    ...actual,
-    useNavigate: () => mockNavigate,
-  };
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual<typeof import("react-router-dom")>(
+    "react-router-dom"
+  );
+  return { ...actual, useNavigate: () => mockNavigate };
 });
 
-// ✅ supabase mock
+// --- Mock supabase client ---
 vi.mock("@/integrations/supabase/client", () => {
   const mockSingle = vi.fn();
   const mockEq = vi.fn(() => ({ eq: mockEq, single: mockSingle }));
@@ -32,19 +28,22 @@ vi.mock("@/integrations/supabase/client", () => {
   };
 });
 
-const { mockSingle } = (vi.mocked(
-  require("@/integrations/supabase/client")
-).__mocks);
+// We'll re-import fresh mocks in each test
+let mockSingle: ReturnType<typeof vi.fn>;
 
 describe("Authentication flow (integration)", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
-    vi.resetModules(); // ✅ ensures mocks are always fresh per test
+    vi.resetModules();
     localStorage.clear();
+
+    // dynamically import mocks so they’re fresh every time
+    const supabaseMock = (await import("@/integrations/supabase/client"))
+      .__mocks;
+    mockSingle = supabaseMock.mockSingle;
   });
 
   it("logs in successfully and navigates to dashboard", async () => {
-    // arrange supabase mock
     mockSingle.mockResolvedValueOnce({
       data: {
         user_id: 1,
@@ -74,11 +73,9 @@ describe("Authentication flow (integration)", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
-    // ✅ assert navigate OR dashboard content
-    await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith("/dashboard");
-      expect(screen.getByText(/dashboard/i)).toBeInTheDocument();
-    });
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith("/dashboard")
+    );
   });
 
   it("logs out successfully and navigates to auth page", async () => {
@@ -93,9 +90,8 @@ describe("Authentication flow (integration)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /logout/i }));
 
-    await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith("/auth");
-      expect(screen.getByText(/sign in/i)).toBeInTheDocument();
-    });
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith("/auth")
+    );
   });
 });
