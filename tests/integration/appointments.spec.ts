@@ -1,4 +1,3 @@
-// tests/e2e/appointments.spec.ts
 import { test, expect } from '@playwright/test';
 import { login, seedDashboardAppointments, seedAppointmentDetails, expectOnDetails, openAnyAppointment } from './utils';
 import { setupTestEnvironment } from './test-setup';
