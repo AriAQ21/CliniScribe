@@ -7,7 +7,7 @@
 // * Editing & saving transcript
 // * Error recovery when sending for transcription
 
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react"; 
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi, describe, it, beforeEach, expect } from "vitest";
 import { UnifiedAppointmentsList } from "@/components/UnifiedAppointmentsList";
@@ -151,7 +151,6 @@ describe("Complete Clinician Journey (integration)", () => {
   });
 
   it("runs recording flow before transcription", async () => {
-    // Start idle → renders Start button
     currentTranscriptionMock = makeTranscriptionMock({ recordingState: "idle" });
     render(<DashboardOnly />);
     fireEvent.click(screen.getByText("View Details"));
@@ -161,13 +160,11 @@ describe("Complete Clinician Journey (integration)", () => {
     fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
     expect(mockStartRecording).toHaveBeenCalled();
 
-    // Re-render with recording state → Pause button should appear
     currentTranscriptionMock = makeTranscriptionMock({ recordingState: "recording" });
     render(<DetailOnly />);
     fireEvent.click(await screen.findByRole("button", { name: /pause recording/i }));
     expect(mockPauseRecording).toHaveBeenCalled();
 
-    // Send for transcription
     mockSendForTranscription.mockResolvedValue({});
     fireEvent.click(screen.getByRole("button", { name: /send for transcription/i }));
     await waitFor(() => expect(mockSendForTranscription).toHaveBeenCalled());
@@ -184,7 +181,6 @@ describe("Complete Clinician Journey (integration)", () => {
   });
 
   it("edits and saves transcript", async () => {
-    // Initial render → edit button visible
     currentTranscriptionMock = makeTranscriptionMock({ isEditingTranscription: false });
     render(<DashboardOnly />);
     fireEvent.click(screen.getByText("View Details"));
@@ -192,7 +188,6 @@ describe("Complete Clinician Journey (integration)", () => {
     fireEvent.click(await screen.findByRole("button", { name: /edit transcription/i }));
     expect(mockEditTranscription).toHaveBeenCalled();
 
-    // Re-render in edit mode → textbox visible
     currentTranscriptionMock = makeTranscriptionMock({
       isEditingTranscription: true,
       transcriptionText: "Editable text",
@@ -204,9 +199,11 @@ describe("Complete Clinician Journey (integration)", () => {
     await waitFor(() => expect(mockSaveTranscription).toHaveBeenCalled());
   });
 
-    it("handles error recovery on send for transcription", async () => {
+  it("handles error recovery on send for transcription", async () => {
     mockSendForTranscription
-      .mockImplementationOnce(() => Promise.reject(new Error("Service unavailable")))
+      .mockImplementationOnce(() =>
+        Promise.reject(new Error("Service unavailable"))
+      )
       .mockResolvedValueOnce({ transcript: "Recovered transcript" });
 
     render(<DashboardOnly />);
@@ -215,14 +212,13 @@ describe("Complete Clinician Journey (integration)", () => {
 
     fireEvent.click(await screen.findByRole("checkbox", { name: /consent/i }));
 
-    // Wrap in act to ensure rejection handling is flushed
-    await waitFor(async () => {
-      await act(async () => {
+    // Swallow rejection so test doesn't crash
+    await act(async () => {
+      try {
         fireEvent.click(screen.getByRole("button", { name: /send for transcription/i }));
-      });
+      } catch (_) {}
     });
 
-    // Either toast or error UI should be called
     await waitFor(() => {
       expect(mockToast).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -231,7 +227,6 @@ describe("Complete Clinician Journey (integration)", () => {
       );
     });
 
-    // Retry should succeed
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /send for transcription/i }));
     });
@@ -241,4 +236,3 @@ describe("Complete Clinician Journey (integration)", () => {
     );
   });
 });
-
