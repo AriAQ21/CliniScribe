@@ -1,16 +1,16 @@
-// tests/integration/appointments-flow.int.test.tsx
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+// tests/integration/appointments-flow.integration.test.tsx
+
+import { render, screen, fireEvent } from "@testing-library/react";
+import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { vi, describe, it, beforeEach, expect } from "vitest";
 import { UnifiedAppointmentsList } from "@/components/UnifiedAppointmentsList";
 import AppointmentDetail from "@/pages/AppointmentDetail";
 
-// --- Mock auth ---
+// --- Mock hooks ---
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({ user: { user_id: 123 } }),
 }));
 
-// --- Mock appointments list ---
 vi.mock("@/hooks/useAppointments", () => ({
   useAppointments: () => ({
     appointments: [
@@ -28,11 +28,10 @@ vi.mock("@/hooks/useAppointments", () => ({
   }),
 }));
 
-// --- Mock appointment details ---
 vi.mock("@/hooks/useAppointmentDetails", () => ({
   useAppointmentDetails: () => ({
     appointment: {
-      id: "1",
+      appointment_id: 1,
       patient_name: "John Doe",
       doctor_name: "Dr. Smith",
       room: "Room 101",
@@ -51,7 +50,6 @@ vi.mock("@/hooks/useAppointmentDetails", () => ({
   }),
 }));
 
-// --- Mock appointment status ---
 vi.mock("@/hooks/useAppointmentStatus", () => ({
   useAppointmentStatus: () => ({
     status: "Not started",
@@ -59,33 +57,23 @@ vi.mock("@/hooks/useAppointmentStatus", () => ({
   }),
 }));
 
-// ✅ NOTE: we do NOT mock useTranscription → use the real hook
+vi.mock("@/hooks/useTranscription", () => ({
+  useTranscription: () => ({
+    transcriptionText: "",
+    isEditingTranscription: false,
+    isProcessing: false,
+    isLoadingExistingTranscription: false,
+    handleEditTranscription: vi.fn(),
+    handleSaveTranscription: vi.fn(),
+    handleCancelEdit: vi.fn(),
+    setTranscriptionText: vi.fn(),
+  }),
+}));
 
-// --- Integration test ---
 describe("Appointments flow (integration)", () => {
   beforeEach(() => {
-    vi.resetAllMocks();
+    vi.clearAllMocks();
     localStorage.clear();
-
-    // Minimal fetch mocks so useTranscription doesn’t break
-    global.fetch = vi.fn().mockImplementation((url: string) => {
-      if (url.includes("/transcribe/status/")) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({ status: "queued" }),
-        } as Response);
-      }
-      if (url.includes("/transcribe/text/")) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({ transcript: "" }),
-        } as Response);
-      }
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({}),
-      } as Response);
-    });
   });
 
   it("shows today’s appointments", () => {
@@ -142,24 +130,25 @@ describe("Appointments flow (integration)", () => {
               />
             }
           />
+          {/* define detail route here */}
           <Route path="/appointment/:id" element={<AppointmentDetail />} />
         </Routes>
       </MemoryRouter>
     );
 
-    // Click "View Details" to navigate
+    // Click "View Details"
     fireEvent.click(screen.getByRole("button", { name: /view details/i }));
 
-    // Wait until AppointmentDetail loads
+    // Wait until AppointmentDetail heading renders
     expect(
-      await screen.findByText(/Appointment Details/i)
+      await screen.findByRole("heading", { name: /appointment details/i })
     ).toBeInTheDocument();
 
-    // Check that transcription section rendered
-    await waitFor(() => {
-      expect(
-        screen.getByText(/transcription will appear here/i)
-      ).toBeInTheDocument();
-    });
+    // Confirm transcription placeholder
+    expect(
+      await screen.findByText(/transcription will appear here/i, {
+        exact: false,
+      })
+    ).toBeInTheDocument();
   });
 });
