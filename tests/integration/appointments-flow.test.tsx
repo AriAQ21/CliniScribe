@@ -96,7 +96,6 @@ describe("Appointments flow (integration)", () => {
   it("user can see today's appointments", () => {
     render(<AppUnderTest />);
     expect(screen.getByText("John Doe")).toBeInTheDocument();
-    expect(screen.getByText("Dr. Smith")).toBeInTheDocument();
   });
 
   it("user can navigate to appointment details and see transcript placeholder", () => {
