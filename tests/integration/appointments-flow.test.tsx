@@ -101,7 +101,8 @@ describe("Appointments flow (integration)", () => {
   it("user can navigate to appointment details and see transcript placeholder", async () => {
     render(<AppUnderTest />);
 
-    fireEvent.click(screen.getByText("View Details"));
+    fireEvent.click(screen.getByRole("button", { name: /view details/i }));
+    screen.debug();
 
     // wait for heading
     expect(
