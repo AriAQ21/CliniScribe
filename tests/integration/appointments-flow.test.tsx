@@ -1,14 +1,16 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+// tests/integration/appointments-flow.int.test.tsx
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi, describe, it, beforeEach, expect } from "vitest";
 import { UnifiedAppointmentsList } from "@/components/UnifiedAppointmentsList";
 import AppointmentDetail from "@/pages/AppointmentDetail";
 
-// --- Mock hooks ---
+// --- Mock auth ---
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({ user: { user_id: 123 } }),
 }));
 
+// --- Mock appointments list ---
 vi.mock("@/hooks/useAppointments", () => ({
   useAppointments: () => ({
     appointments: [
@@ -26,10 +28,11 @@ vi.mock("@/hooks/useAppointments", () => ({
   }),
 }));
 
+// --- Mock appointment details ---
 vi.mock("@/hooks/useAppointmentDetails", () => ({
   useAppointmentDetails: () => ({
     appointment: {
-      appointment_id: 1,
+      id: "1",
       patient_name: "John Doe",
       doctor_name: "Dr. Smith",
       room: "Room 101",
@@ -48,6 +51,7 @@ vi.mock("@/hooks/useAppointmentDetails", () => ({
   }),
 }));
 
+// --- Mock appointment status ---
 vi.mock("@/hooks/useAppointmentStatus", () => ({
   useAppointmentStatus: () => ({
     status: "Not started",
@@ -55,104 +59,107 @@ vi.mock("@/hooks/useAppointmentStatus", () => ({
   }),
 }));
 
-vi.mock("@/hooks/useTranscription", () => ({
-  useTranscription: () => ({
-    transcriptionText: "",
-    isEditingTranscription: false,
-    isProcessing: false,
-    isLoadingExistingTranscription: false,
-    handleEditTranscription: vi.fn(),
-    handleSaveTranscription: vi.fn(),
-    handleCancelEdit: vi.fn(),
-    setTranscriptionText: vi.fn(),
-  }),
-}));
+// ✅ NOTE: we do NOT mock useTranscription → use the real hook
 
-// --- Mock react-router navigation ---
-const mockedNavigate = vi.fn();
-vi.mock("react-router-dom", async () => {
-  const actual = await vi.importActual<typeof import("react-router-dom")>(
-    "react-router-dom"
-  );
-  return {
-    ...actual,
-    useNavigate: () => mockedNavigate,
-  };
-});
-
-// --- Test wrapper ---
-const AppUnderTest = () => (
-  <MemoryRouter initialEntries={["/dashboard"]}>
-    <Routes>
-      <Route
-        path="/dashboard"
-        element={
-          <UnifiedAppointmentsList
-            dummyAppointments={[]}
-            importedAppointments={[
-              {
-                id: "1",
-                patientName: "John Doe",
-                doctorName: "Dr. Smith",
-                room: "Room 101",
-                date: "2025-08-19",
-                time: "09:00",
-              },
-            ]}
-            selectedDate={new Date("2025-08-19")}
-          />
-        }
-      />
-      <Route path="/appointment/:id" element={<AppointmentDetail />} />
-    </Routes>
-  </MemoryRouter>
-);
-
+// --- Integration test ---
 describe("Appointments flow (integration)", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
+    localStorage.clear();
+
+    // Minimal fetch mocks so useTranscription doesn’t break
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes("/transcribe/status/")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ status: "queued" }),
+        } as Response);
+      }
+      if (url.includes("/transcribe/text/")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ transcript: "" }),
+        } as Response);
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({}),
+      } as Response);
+    });
   });
 
-  it("user can see today's appointments", () => {
-    render(<AppUnderTest />);
-    expect(screen.getByText("John Doe")).toBeInTheDocument();
-  });
-
-  it("user can navigate to appointment details and see transcript placeholder", async () => {
-    render(<AppUnderTest />);
-
-    // Click "View Details"
-    fireEvent.click(screen.getByRole("button", { name: /view details/i }));
-
-    // Simulate navigate being called
-    expect(mockedNavigate).toHaveBeenCalledWith("/appointment/1");
-
-    // Render the AppointmentDetail manually (since navigate is mocked)
+  it("shows today’s appointments", () => {
     render(
-      <MemoryRouter initialEntries={["/appointment/1"]}>
+      <MemoryRouter initialEntries={["/dashboard"]}>
         <Routes>
+          <Route
+            path="/dashboard"
+            element={
+              <UnifiedAppointmentsList
+                dummyAppointments={[]}
+                importedAppointments={[
+                  {
+                    id: "1",
+                    patientName: "John Doe",
+                    doctorName: "Dr. Smith",
+                    room: "Room 101",
+                    date: "2025-08-19",
+                    time: "09:00",
+                  },
+                ]}
+                selectedDate={new Date("2025-08-19")}
+              />
+            }
+          />
           <Route path="/appointment/:id" element={<AppointmentDetail />} />
         </Routes>
       </MemoryRouter>
     );
 
-    // Now check AppointmentDetail content
+    expect(screen.getByText("John Doe")).toBeInTheDocument();
+  });
+
+  it("navigates to appointment details and shows transcription section", async () => {
+    render(
+      <MemoryRouter initialEntries={["/dashboard"]}>
+        <Routes>
+          <Route
+            path="/dashboard"
+            element={
+              <UnifiedAppointmentsList
+                dummyAppointments={[]}
+                importedAppointments={[
+                  {
+                    id: "1",
+                    patientName: "John Doe",
+                    doctorName: "Dr. Smith",
+                    room: "Room 101",
+                    date: "2025-08-19",
+                    time: "09:00",
+                  },
+                ]}
+                selectedDate={new Date("2025-08-19")}
+              />
+            }
+          />
+          <Route path="/appointment/:id" element={<AppointmentDetail />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    // Click "View Details" to navigate
+    fireEvent.click(screen.getByRole("button", { name: /view details/i }));
+
+    // Wait until AppointmentDetail loads
     expect(
-      await screen.findByText(/Appointment Details/i, { exact: false })
+      await screen.findByText(/Appointment Details/i)
     ).toBeInTheDocument();
 
-    const probes = [
-      /consent/i,
-      /start recording/i,
-      /upload (audio|file)/i,
-      /edit transcription/i,
-      /send for transcription/i,
-      /transcript|transcription/i,
-    ];
-
-    const found = probes.some((pattern) =>
-      screen.queryByText(pattern, { exact: false })
-    );
-    expect(found).toBe(true);
+    // Check that transcription section rendered
+    await waitFor(() => {
+      expect(
+        screen.getByText(/transcription will appear here/i)
+      ).toBeInTheDocument();
+    });
   });
 });
