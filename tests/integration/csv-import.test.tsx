@@ -82,7 +82,9 @@ describe("Appointment Import Dialog (integration)", () => {
     await waitFor(() => {
       expect(toastSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          title: expect.stringMatching(/invalid date/i),
+          title: "Import Failed",
+          description: expect.stringMatching(/invalid date format/i),
+          variant: "destructive",
         })
       );
     });
