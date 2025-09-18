@@ -14,57 +14,40 @@ vi.mock("react-router-dom", async () => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
-// 🔹 Supabase mock with logging
+// 🔹 Mock supabase auth methods
 vi.mock("@/integrations/supabase/client", () => {
-  const mockSingle = vi.fn();
-  const chain = {
-    eq: vi.fn((...args) => {
-      console.log("🟡 supabase.eq called with:", args);
-      return chain;
-    }),
-    single: vi.fn((...args) => {
-      console.log("🟡 supabase.single called with:", args);
-      return mockSingle();
-    }),
-  };
-
-  const mockSelect = vi.fn((...args) => {
-    console.log("🟡 supabase.select called with:", args);
-    return chain;
-  });
-
-  const mockFrom = vi.fn((...args) => {
-    console.log("🟡 supabase.from called with:", args);
-    return { select: mockSelect };
-  });
+  const mockSignInWithPassword = vi.fn();
+  const mockSignOut = vi.fn();
 
   return {
-    supabase: { from: mockFrom },
-    __mocks: { mockFrom, mockSelect, mockSingle },
+    supabase: {
+      auth: {
+        signInWithPassword: mockSignInWithPassword,
+        signOut: mockSignOut,
+      },
+    },
+    __mocks: { mockSignInWithPassword, mockSignOut },
   };
 });
 
 describe("Authentication flow (integration)", () => {
-  let mockSingle: ReturnType<typeof vi.fn>;
+  let mockSignInWithPassword: ReturnType<typeof vi.fn>;
+  let mockSignOut: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     vi.clearAllMocks();
     localStorage.clear();
 
-    // Import fresh mocks each time
+    // Grab fresh mocks every test run
     const { __mocks } = await import("@/integrations/supabase/client");
-    mockSingle = __mocks.mockSingle;
+    mockSignInWithPassword = __mocks.mockSignInWithPassword;
+    mockSignOut = __mocks.mockSignOut;
   });
 
   it("logs in successfully and navigates to dashboard", async () => {
-    mockSingle.mockResolvedValueOnce({
+    mockSignInWithPassword.mockResolvedValueOnce({
       data: {
-        user_id: 1,
-        first_name: "Alice",
-        last_name: "Doe",
-        email: "alice@email.com",
-        role: "doctor",
-        location: "Room 1",
+        user: { id: 1, email: "alice@email.com" },
       },
       error: null,
     });
@@ -86,12 +69,14 @@ describe("Authentication flow (integration)", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
-    await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith("/dashboard");
-    });
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith("/dashboard")
+    );
   });
 
   it("logs out successfully and navigates to auth page", async () => {
+    mockSignOut.mockResolvedValueOnce({ error: null });
+
     render(
       <MemoryRouter initialEntries={["/dashboard"]}>
         <Routes>
@@ -103,8 +88,8 @@ describe("Authentication flow (integration)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /logout/i }));
 
-    await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith("/auth");
-    });
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith("/auth")
+    );
   });
 });
