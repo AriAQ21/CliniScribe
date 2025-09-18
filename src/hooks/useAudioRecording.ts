@@ -51,21 +51,10 @@ export function useAudioRecording(deviceConstraints?: MediaStreamConstraints): U
       
       mediaStreamRef.current = stream;
       setPermissionGranted(true);
-
-      // Initialize MediaRecorder
-      console.log('🧪 useAudioRecording: About to create MediaRecorder');
-      console.log('🧪 useAudioRecording: Stream:', stream);
-      console.log('🧪 useAudioRecording: Stream type:', typeof stream);
-      console.log('🧪 useAudioRecording: Stream constructor:', stream?.constructor?.name);
-      console.log('🧪 useAudioRecording: Stream has getTracks:', typeof stream?.getTracks === 'function');
-      console.log('🧪 useAudioRecording: Stream active:', stream?.active);
-      console.log('🧪 useAudioRecording: Stream id:', stream?.id);
       
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: 'audio/webm;codecs=opus'
       });
-      
-      console.log('🧪 useAudioRecording: MediaRecorder created successfully');
       
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
