@@ -204,9 +204,9 @@ describe("Complete Clinician Journey (integration)", () => {
     await waitFor(() => expect(mockSaveTranscription).toHaveBeenCalled());
   });
 
-  it("handles error recovery on send for transcription", async () => {
+    it("handles error recovery on send for transcription", async () => {
     mockSendForTranscription
-      .mockRejectedValueOnce(new Error("Service unavailable"))
+      .mockImplementationOnce(() => Promise.reject(new Error("Service unavailable")))
       .mockResolvedValueOnce({ transcript: "Recovered transcript" });
 
     render(<DashboardOnly />);
@@ -214,15 +214,32 @@ describe("Complete Clinician Journey (integration)", () => {
     render(<DetailOnly />);
 
     fireEvent.click(await screen.findByRole("checkbox", { name: /consent/i }));
-    fireEvent.click(screen.getByRole("button", { name: /send for transcription/i }));
 
-    await waitFor(() => {
-      expect(mockToast).toHaveBeenCalled(); // toast error is shown
+    // Wrap in act to ensure rejection handling is flushed
+    await waitFor(async () => {
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: /send for transcription/i }));
+      });
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /send for transcription/i }));
+    // Either toast or error UI should be called
+    await waitFor(() => {
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: expect.stringMatching(/error/i),
+        })
+      );
+    });
+
+    // Retry should succeed
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /send for transcription/i }));
+    });
+
     await waitFor(() =>
       expect(mockSendForTranscription).toHaveBeenCalledTimes(2)
     );
   });
-});
+
+
+
