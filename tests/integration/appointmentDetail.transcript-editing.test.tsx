@@ -6,42 +6,42 @@
 // * Starts in edit mode with unsaved text.
 // * Clicking Cancel calls handleCancelEdit.
 
+// tests/integration/transcription-edit.int.test.tsx
+// This tests:
+// * Transcript renders
+// * Edit → Save calls backend update
+// * Edit → Cancel restores original
 
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import AppointmentDetail from "@/pages/AppointmentDetail";
 import { vi, describe, it, beforeEach, expect } from "vitest";
 
-// --- Mocks ---
+// --- Mock toast so we can intercept messages
 const mockToast = vi.fn();
 vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: mockToast }),
 }));
 
-// mock auth (always return user)
+// Mock auth (always logged in)
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({ user: { user_id: "test-user" } }),
 }));
 
-// mock appointment details (so page loads without errors)
+// Mock appointment details (so page loads fast)
 vi.mock("@/hooks/useAppointmentDetails", () => ({
   useAppointmentDetails: () => ({
-    appointment: { room: "Room 1" },
+    appointment: { id: "1", room: "Room 1" },
     patientData: {
       name: "Test Patient",
       dateOfBirth: "01/01/1970",
       nhsNumber: "123",
+      time: "9:00 AM",
     },
     loading: false,
     error: null,
   }),
 }));
-
-// we’ll override return values in each test
-vi.mock("@/hooks/useTranscription", () => ({
-  useTranscription: vi.fn(),
-}));
-import { useTranscription } from "@/hooks/useTranscription";
 
 describe("AppointmentDetail transcript editing (integration)", () => {
   const renderDetail = () =>
@@ -54,78 +54,76 @@ describe("AppointmentDetail transcript editing (integration)", () => {
     );
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     localStorage.clear();
+
+    // Pretend transcription already exists
+    localStorage.setItem("mt:lastAudioId:1", "fake-audio-id");
+
+    // Default fetch mocks
+    global.fetch = vi.fn()
+      // load transcript by id
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ transcript: "Initial transcript text" }),
+      } as Response)
+      // update transcript (when saving)
+      .mockResolvedValue({
+        ok: true,
+        json: async () => ({ status: "success" }),
+      } as Response);
   });
 
   it("user can edit and save transcript", async () => {
-    const handleEditTranscription = vi.fn();
-    const handleSaveTranscription = vi.fn();
-
-    (useTranscription as vi.Mock).mockReturnValue({
-      transcriptionText: "This is a test transcript",
-      isEditingTranscription: false,
-      isProcessing: false,
-      isLoadingExistingTranscription: false,
-      handleEditTranscription,
-      handleSaveTranscription,
-      handleCancelEdit: vi.fn(),
-      setTranscriptionText: vi.fn(),
-    });
-
     renderDetail();
 
-    // transcript appears
-    expect(screen.getByText("This is a test transcript")).toBeInTheDocument();
+    // Wait for transcript to appear
+    expect(
+      await screen.findByText("Initial transcript text")
+    ).toBeInTheDocument();
 
-    // enter edit mode
+    // Enter edit mode
     fireEvent.click(screen.getByRole("button", { name: /edit transcription/i }));
-    expect(handleEditTranscription).toHaveBeenCalled();
 
-    // simulate editing mode
-    (useTranscription as vi.Mock).mockReturnValue({
-      transcriptionText: "Updated transcript text",
-      isEditingTranscription: true,
-      isProcessing: false,
-      isLoadingExistingTranscription: false,
-      handleEditTranscription,
-      handleSaveTranscription,
-      handleCancelEdit: vi.fn(),
-      setTranscriptionText: vi.fn(),
-    });
+    // Change the text
+    const textarea = await screen.findByRole("textbox");
+    fireEvent.change(textarea, { target: { value: "Updated transcript text" } });
 
-    renderDetail();
-
+    // Save
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
 
+    // Assert backend was called
     await waitFor(() => {
-      expect(handleSaveTranscription).toHaveBeenCalled();
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringMatching(/\/transcribe\/update\/fake-audio-id$/),
+        expect.objectContaining({ method: "POST" })
+      );
     });
+
+    // Toast should confirm save
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Transcription Saved" })
+    );
   });
 
   it("user can cancel transcript edit", async () => {
-    const handleEditTranscription = vi.fn();
-    const handleCancelEdit = vi.fn();
-
-    // Start in edit mode
-    (useTranscription as vi.Mock).mockReturnValue({
-      transcriptionText: "Unsaved changes",
-      isEditingTranscription: true,
-      isProcessing: false,
-      isLoadingExistingTranscription: false,
-      handleEditTranscription,
-      handleSaveTranscription: vi.fn(),
-      handleCancelEdit,
-      setTranscriptionText: vi.fn(),
-    });
-
     renderDetail();
 
-    // cancel edit
+    // Wait for transcript
+    await screen.findByText("Initial transcript text");
+
+    // Enter edit mode
+    fireEvent.click(screen.getByRole("button", { name: /edit transcription/i }));
+
+    const textarea = await screen.findByRole("textbox");
+    fireEvent.change(textarea, { target: { value: "Unsaved changes" } });
+
+    // Cancel edit
     fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
 
+    // Should return to original text
     await waitFor(() => {
-      expect(handleCancelEdit).toHaveBeenCalled();
+      expect(screen.getByText("Initial transcript text")).toBeInTheDocument();
     });
   });
 });
