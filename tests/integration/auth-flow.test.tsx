@@ -6,19 +6,65 @@
 // * Redirect to intended page (or dashboard fallback)
 // * Logout clears session
 
+
+// tests/integration/auth-flow.test.tsx
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi, describe, it, beforeEach, expect } from "vitest";
+import React, { createContext, useContext, useState } from "react";
 import AuthPage from "@/pages/AuthPage";
 import Index from "@/pages/Index";
-import { useAuth } from "@/hooks/useAuth";
 
-// shared mocks
-let mockLogin: ReturnType<typeof vi.fn>;
-let mockLogout: ReturnType<typeof vi.fn>;
-let mockAuthState: { user: any; isAuthenticated: boolean; loading: boolean };
+// ------------------ Mock Auth Context ------------------
+type AuthContextType = {
+  user: any;
+  isAuthenticated: boolean;
+  loading: boolean;
+  login: (email: string, password: string) => Promise<any>;
+  logout: () => void;
+};
 
-// Helper: checks for any valid dashboard text
+const AuthContext = createContext<AuthContextType | null>(null);
+
+const MockAuthProvider = ({ children }: { children: React.ReactNode }) => {
+  const [user, setUser] = useState<any>(null);
+
+  const login = async (email: string, password: string) => {
+    if (email === "alice@email.com" && password === "password") {
+      const newUser = { user_id: 1, email };
+      setUser(newUser);
+      return { user: newUser };
+    }
+    return { error: "Invalid email or password" };
+  };
+
+  const logout = () => setUser(null);
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        isAuthenticated: !!user,
+        loading: false,
+        login,
+        logout,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+// Mock the actual useAuth hook
+vi.mock("@/hooks/useAuth", () => ({
+  useAuth: () => {
+    const ctx = useContext(AuthContext);
+    if (!ctx) throw new Error("useAuth must be used within MockAuthProvider");
+    return ctx;
+  },
+}));
+
+// ------------------ Helpers ------------------
 const assertOnDashboard = async () => {
   const patterns = [
     /imported appointments/i,
@@ -34,53 +80,40 @@ const assertOnDashboard = async () => {
   });
 };
 
-// Protected route stub
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated } = useContext(AuthContext)!;
   return isAuthenticated ? <>{children}</> : <AuthPage />;
 };
 
-// Dashboard with logout button stub
-const DashboardWithLogout = ({ onLogout }: { onLogout: () => void }) => (
-  <>
-    <button onClick={onLogout}>Logout</button>
-    <Index
-      dummyAppointments={[]}
-      importedAppointments={[]}
-      selectedDate={new Date()}
-    />
-  </>
-);
+const DashboardWithLogout = () => {
+  const { logout } = useContext(AuthContext)!;
+  return (
+    <>
+      <button onClick={logout}>Logout</button>
+      <Index
+        dummyAppointments={[]}
+        importedAppointments={[]}
+        selectedDate={new Date()}
+      />
+    </>
+  );
+};
 
+// ------------------ Tests ------------------
 describe("Authentication flow (integration)", () => {
   beforeEach(() => {
-    vi.resetModules();
-    mockLogin = vi.fn();
-    mockLogout = vi.fn();
-
-    // baseline auth state
-    mockAuthState = { user: null, isAuthenticated: false, loading: false };
-
-    vi.doMock("@/hooks/useAuth", () => ({
-      useAuth: () => ({
-        login: mockLogin,
-        logout: mockLogout,
-        user: mockAuthState.user,
-        isAuthenticated: mockAuthState.isAuthenticated,
-        loading: mockAuthState.loading,
-      }),
-    }));
+    vi.clearAllMocks();
   });
 
   it("shows error for invalid credentials", async () => {
-    mockLogin.mockResolvedValue({ error: "Invalid email or password" });
-
     render(
-      <MemoryRouter initialEntries={["/auth"]}>
-        <Routes>
-          <Route path="/auth" element={<AuthPage />} />
-        </Routes>
-      </MemoryRouter>
+      <MockAuthProvider>
+        <MemoryRouter initialEntries={["/auth"]}>
+          <Routes>
+            <Route path="/auth" element={<AuthPage />} />
+          </Routes>
+        </MemoryRouter>
+      </MockAuthProvider>
     );
 
     fireEvent.change(screen.getByLabelText(/email/i), {
@@ -99,28 +132,24 @@ describe("Authentication flow (integration)", () => {
   });
 
   it("redirects to dashboard on successful login", async () => {
-    mockLogin.mockImplementation(async () => {
-      mockAuthState.isAuthenticated = true;
-      mockAuthState.user = { user_id: 1, email: "alice@email.com" };
-      return { user: mockAuthState.user };
-    });
-
     render(
-      <MemoryRouter initialEntries={["/auth"]}>
-        <Routes>
-          <Route path="/auth" element={<AuthPage />} />
-          <Route
-            path="/dashboard"
-            element={
-              <Index
-                dummyAppointments={[]}
-                importedAppointments={[]}
-                selectedDate={new Date()}
-              />
-            }
-          />
-        </Routes>
-      </MemoryRouter>
+      <MockAuthProvider>
+        <MemoryRouter initialEntries={["/auth"]}>
+          <Routes>
+            <Route path="/auth" element={<AuthPage />} />
+            <Route
+              path="/dashboard"
+              element={
+                <Index
+                  dummyAppointments={[]}
+                  importedAppointments={[]}
+                  selectedDate={new Date()}
+                />
+              }
+            />
+          </Routes>
+        </MemoryRouter>
+      </MockAuthProvider>
     );
 
     fireEvent.change(screen.getByLabelText(/email/i), {
@@ -135,28 +164,24 @@ describe("Authentication flow (integration)", () => {
   });
 
   it("persists session across reloads (simulated)", async () => {
-    mockLogin.mockImplementation(async () => {
-      mockAuthState.isAuthenticated = true;
-      mockAuthState.user = { user_id: 1 };
-      return { user: mockAuthState.user };
-    });
-
     const { rerender } = render(
-      <MemoryRouter initialEntries={["/auth"]}>
-        <Routes>
-          <Route path="/auth" element={<AuthPage />} />
-          <Route
-            path="/dashboard"
-            element={
-              <Index
-                dummyAppointments={[]}
-                importedAppointments={[]}
-                selectedDate={new Date()}
-              />
-            }
-          />
-        </Routes>
-      </MemoryRouter>
+      <MockAuthProvider>
+        <MemoryRouter initialEntries={["/auth"]}>
+          <Routes>
+            <Route path="/auth" element={<AuthPage />} />
+            <Route
+              path="/dashboard"
+              element={
+                <Index
+                  dummyAppointments={[]}
+                  importedAppointments={[]}
+                  selectedDate={new Date()}
+                />
+              }
+            />
+          </Routes>
+        </MemoryRouter>
+      </MockAuthProvider>
     );
 
     fireEvent.change(screen.getByLabelText(/email/i), {
@@ -169,64 +194,57 @@ describe("Authentication flow (integration)", () => {
 
     await assertOnDashboard();
 
-    // simulate reload: state already logged in
-    mockAuthState.isAuthenticated = true;
-    mockAuthState.user = { user_id: 1 };
-
+    // Simulate reload by rerendering at /dashboard
     rerender(
-      <MemoryRouter initialEntries={["/dashboard"]}>
-        <Routes>
-          <Route
-            path="/dashboard"
-            element={
-              <Index
-                dummyAppointments={[]}
-                importedAppointments={[]}
-                selectedDate={new Date()}
-              />
-            }
-          />
-        </Routes>
-      </MemoryRouter>
+      <MockAuthProvider>
+        <MemoryRouter initialEntries={["/dashboard"]}>
+          <Routes>
+            <Route
+              path="/dashboard"
+              element={
+                <Index
+                  dummyAppointments={[]}
+                  importedAppointments={[]}
+                  selectedDate={new Date()}
+                />
+              }
+            />
+          </Routes>
+        </MemoryRouter>
+      </MockAuthProvider>
     );
 
     await assertOnDashboard();
   });
 
   it("redirects to intended page after login (or dashboard fallback)", async () => {
-    mockLogin.mockImplementation(async () => {
-      mockAuthState.isAuthenticated = true;
-      mockAuthState.user = { user_id: 1 };
-      return { user: mockAuthState.user };
-    });
-
-    const TestApp = () => (
-      <MemoryRouter initialEntries={["/appointment/123"]}>
-        <Routes>
-          <Route path="/auth" element={<AuthPage />} />
-          <Route
-            path="/dashboard"
-            element={
-              <Index
-                dummyAppointments={[]}
-                importedAppointments={[]}
-                selectedDate={new Date()}
-              />
-            }
-          />
-          <Route
-            path="/appointment/:id"
-            element={
-              <ProtectedRoute>
-                <h1>Appointment 123</h1>
-              </ProtectedRoute>
-            }
-          />
-        </Routes>
-      </MemoryRouter>
+    render(
+      <MockAuthProvider>
+        <MemoryRouter initialEntries={["/appointment/123"]}>
+          <Routes>
+            <Route path="/auth" element={<AuthPage />} />
+            <Route
+              path="/dashboard"
+              element={
+                <Index
+                  dummyAppointments={[]}
+                  importedAppointments={[]}
+                  selectedDate={new Date()}
+                />
+              }
+            />
+            <Route
+              path="/appointment/:id"
+              element={
+                <ProtectedRoute>
+                  <h1>Appointment 123</h1>
+                </ProtectedRoute>
+              }
+            />
+          </Routes>
+        </MemoryRouter>
+      </MockAuthProvider>
     );
-
-    render(<TestApp />);
 
     fireEvent.change(screen.getByLabelText(/email/i), {
       target: { value: "alice@email.com" },
@@ -248,23 +266,22 @@ describe("Authentication flow (integration)", () => {
   });
 
   it("clears session on logout", async () => {
-    mockAuthState.isAuthenticated = true;
-    mockAuthState.user = { user_id: 1 };
-
     render(
-      <MemoryRouter initialEntries={["/dashboard"]}>
-        <Routes>
-          <Route
-            path="/dashboard"
-            element={<DashboardWithLogout onLogout={mockLogout} />}
-          />
-        </Routes>
-      </MemoryRouter>
+      <MockAuthProvider>
+        <MemoryRouter initialEntries={["/dashboard"]}>
+          <Routes>
+            <Route path="/dashboard" element={<DashboardWithLogout />} />
+          </Routes>
+        </MemoryRouter>
+      </MockAuthProvider>
     );
 
-    // multiple logout buttons exist, just click one
     const logoutButtons = screen.getAllByRole("button", { name: /logout/i });
     fireEvent.click(logoutButtons[logoutButtons.length - 1]);
-    expect(mockLogout).toHaveBeenCalled();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /sign in/i })).toBeInTheDocument();
+    });
   });
 });
+
