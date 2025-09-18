@@ -1,10 +1,10 @@
-This tests:
-* CSV import (via useImportedAppointments)
-* Dashboard → Appointment detail navigation
-* Recording flow (via useAudioRecording)
-* Transcription flow (via useTranscription)
-* Editing & saving transcript
-* Error recovery when sending for transcription
+// This tests:
+// * CSV import (via useImportedAppointments)
+// * Dashboard → Appointment detail navigation
+// * Recording flow (via useAudioRecording)
+// * Transcription flow (via useTranscription)
+// * Editing & saving transcript
+// * Error recovery when sending for transcription
 
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
