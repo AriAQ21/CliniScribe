@@ -5,7 +5,7 @@
 
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi } from "vitest";
-import AppointmentImportDialog from "@/components/AppointmentImportDialog";
+import { AppointmentImportDialog } from "@/components/AppointmentImportDialog";
 
 // Mock useImportedAppointments
 const mockImportAppointments = vi.fn();
@@ -31,7 +31,13 @@ describe("Appointment Import Dialog (integration)", () => {
       message: "Import completed successfully",
     });
 
-    render(<AppointmentImportDialog onImportComplete={vi.fn()} />);
+    render(
+      <AppointmentImportDialog 
+        open={true} 
+        onOpenChange={() => {}} 
+        onImportComplete={vi.fn()} 
+        />
+    );
 
     const file = new File(
       ["Patient Name,Date,Time\nJohn Doe,2025-08-19,09:00"],
