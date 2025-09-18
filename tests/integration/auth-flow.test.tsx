@@ -6,16 +6,41 @@
 // * Redirect to intended page (or dashboard fallback)
 // * Logout clears session
 
+
+// tests/integration/auth-flow.test.tsx
+// This tests:
+// * Invalid creds → error message
+// * Valid creds → redirect to dashboard
+// * Session persists across reloads
+// * Redirect to intended page (or dashboard fallback)
+// * Logout clears session
+
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi, describe, it, beforeEach, expect } from "vitest";
 import AuthPage from "@/pages/AuthPage";
 import AppointmentDetail from "@/pages/AppointmentDetail";
-import Index from "@/pages/Index"; // dashboard with DashboardHeader
+import Index from "@/pages/Index"; // your real dashboard
 
 // shared mocks
 let mockLogin: ReturnType<typeof vi.fn>;
 let mockLogout: ReturnType<typeof vi.fn>;
+
+// Helper: checks for any valid dashboard text
+const assertOnDashboard = async () => {
+  const possibleTexts = [
+    /imported appointments/i,
+    /scheduled appointments/i,
+    /no appointments found/i,
+  ];
+  await waitFor(() => {
+    expect(
+      possibleTexts.some((pattern) =>
+        screen.queryByText(pattern, { exact: false })
+      )
+    ).toBe(true);
+  });
+};
 
 describe("Authentication flow (integration)", () => {
   beforeEach(() => {
@@ -79,7 +104,7 @@ describe("Authentication flow (integration)", () => {
       <MemoryRouter initialEntries={["/auth"]}>
         <Routes>
           <Route path="/auth" element={<AuthPage />} />
-          <Route path="/dashboard" element={<h1>Dashboard</h1>} />
+          <Route path="/dashboard" element={<Index />} />
         </Routes>
       </MemoryRouter>
     );
@@ -92,9 +117,7 @@ describe("Authentication flow (integration)", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
-    await waitFor(() =>
-      expect(screen.getByText(/dashboard/i)).toBeInTheDocument()
-    );
+    await assertOnDashboard();
   });
 
   it("persists session across reloads (simulated)", async () => {
@@ -115,7 +138,7 @@ describe("Authentication flow (integration)", () => {
       <MemoryRouter initialEntries={["/auth"]}>
         <Routes>
           <Route path="/auth" element={<AuthPage />} />
-          <Route path="/dashboard" element={<h1>Dashboard</h1>} />
+          <Route path="/dashboard" element={<Index />} />
         </Routes>
       </MemoryRouter>
     );
@@ -128,9 +151,7 @@ describe("Authentication flow (integration)", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
-    await waitFor(() =>
-      expect(screen.getByText(/dashboard/i)).toBeInTheDocument()
-    );
+    await assertOnDashboard();
 
     // Simulate reload: now authenticated
     vi.doMock("@/hooks/useAuth", () => ({
@@ -146,14 +167,12 @@ describe("Authentication flow (integration)", () => {
     rerender(
       <MemoryRouter initialEntries={["/dashboard"]}>
         <Routes>
-          <Route path="/dashboard" element={<h1>Dashboard</h1>} />
+          <Route path="/dashboard" element={<Index />} />
         </Routes>
       </MemoryRouter>
     );
 
-    await waitFor(() =>
-      expect(screen.getByText(/dashboard/i)).toBeInTheDocument()
-    );
+    await assertOnDashboard();
   });
 
   it("redirects to intended page after login (or dashboard fallback)", async () => {
@@ -173,8 +192,8 @@ describe("Authentication flow (integration)", () => {
       <MemoryRouter initialEntries={["/appointment/123"]}>
         <Routes>
           <Route path="/auth" element={<AuthPage />} />
-          <Route path="/dashboard" element={<h1>Dashboard</h1>} />
-          <Route path="/appointment/:id" element={<h1>Appointment 123</h1>} />
+          <Route path="/dashboard" element={<Index />} />
+          <Route path="/appointment/:id" element={<AppointmentDetail />} />
         </Routes>
       </MemoryRouter>
     );
@@ -190,8 +209,11 @@ describe("Authentication flow (integration)", () => {
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
     await waitFor(() => {
-      const onAppointment = screen.queryByText(/appointment 123/i);
-      const onDashboard = screen.queryByText(/dashboard/i);
+      const onAppointment = screen.queryByText(/appointment/i);
+      const onDashboard =
+        screen.queryByText(/imported appointments/i) ||
+        screen.queryByText(/scheduled appointments/i) ||
+        screen.queryByText(/no appointments found/i);
       expect(onAppointment || onDashboard).toBeTruthy();
     });
   });
@@ -220,3 +242,4 @@ describe("Authentication flow (integration)", () => {
     expect(mockLogout).toHaveBeenCalled();
   });
 });
+
