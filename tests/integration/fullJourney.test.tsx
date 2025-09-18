@@ -1,51 +1,133 @@
-// src/hooks/useDummyAppointments.ts
-import { useState, useEffect } from "react";
+// tests/integration/fullJourney.test.tsx
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import App from "@/App";
+import { vi } from "vitest";
 
-export function useDummyAppointments() {
-  const [appointments, setAppointments] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
+// Polyfill matchMedia for JSDOM (used by sonner)
+beforeAll(() => {
+  window.matchMedia = vi.fn().mockImplementation((query) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(), // deprecated
+    removeListener: vi.fn(), // deprecated
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+});
 
-  useEffect(() => {
-    async function fetchDummyAppointments() {
-      try {
-        setLoading(true);
+// Reset router path before each test
+beforeEach(() => {
+  window.history.pushState({}, "Test page", "/");
 
-        const res = await fetch("/api/dummy-appointments");
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
-        }
+  // Reset & mock fetch
+  vi.resetAllMocks();
+  global.fetch = vi
+    .fn()
+    // First call → dummy appointments
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => [
+        {
+          id: "1",
+          patientName: "John Doe",
+          doctorName: "Dr. Smith",
+          room: "Room 1",
+          date: "2025-09-18",
+          time: "09:00",
+        },
+      ],
+    } as any)
+    // Upload transcription request
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ audio_id: "audio-123", status: "queued" }),
+    } as any)
+    // Poll transcription status → completed
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        audio_id: "audio-123",
+        status: "completed",
+        transcript: "Transcript generated",
+      }),
+    } as any)
+    // Fetch transcript by id
+    .mockResolvedValue({
+      ok: true,
+      json: async () => ({ transcript: "Transcript generated Edited" }),
+    } as any);
+});
 
-        const data = await res.json();
+// --- mocks ---
+vi.mock("@/hooks/useAuth", () => ({
+  useAuth: () => ({
+    isAuthenticated: true,
+    loading: false,
+    user: { user_id: 1, email: "test@email.com" },
+  }),
+}));
 
-        // Defensive check to avoid undefined.map crash
-        if (!Array.isArray(data)) {
-          console.warn("⚠Expected array, got:", data);
-          setAppointments([]);
-          return;
-        }
+describe("Full Clinician Journey (Integration)", () => {
+  it("completes full flow: login → record → transcript → edit → save → reload", async () => {
+    render(<App />);
 
-        setAppointments(
-          data.map((a: any) => ({
-            id: a.id ?? String(Math.random()),
-            patientName: a.patientName ?? "Unknown",
-            doctorName: a.doctorName ?? "Unknown",
-            room: a.room ?? "N/A",
-            date: a.date ?? "",
-            time: a.time ?? "",
-          }))
-        );
-      } catch (err: any) {
-        console.error("Error fetching dummy appointments:", err);
-        setError(err);
-        setAppointments([]); 
-      } finally {
-        setLoading(false);
-      }
-    }
+    // Step 1: Dashboard should load with appointment
+    await waitFor(() => {
+      expect(screen.getByText(/john doe/i)).toBeInTheDocument();
+    });
 
-    fetchDummyAppointments();
-  }, []);
+    // Step 2: Click "View Details"
+    const viewDetailsButton = screen.getByRole("button", {
+      name: /view details/i,
+    });
+    await userEvent.click(viewDetailsButton);
 
-  return { appointments, loading, error };
-}
+    await waitFor(() => {
+      expect(window.location.pathname).toMatch(/\/appointment\/\d+/);
+    });
+
+    // Step 3: Start recording
+    const startRecordingButton = await screen.findByRole("button", {
+      name: /start recording/i,
+    });
+    await userEvent.click(startRecordingButton);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /stop recording/i })
+      ).toBeInTheDocument();
+    });
+
+    // Step 4: Stop recording
+    const stopRecordingButton = screen.getByRole("button", {
+      name: /stop recording/i,
+    });
+    await userEvent.click(stopRecordingButton);
+
+    // Step 5: Wait for transcript to appear
+    await waitFor(() => {
+      expect(screen.getByText(/transcript generated/i)).toBeInTheDocument();
+    });
+
+    // Step 6: Edit transcript
+    const transcriptBox = screen.getByRole("textbox");
+    await userEvent.type(transcriptBox, " Edited");
+
+    // Step 7: Save
+    const saveButton = screen.getByRole("button", { name: /save/i });
+    await userEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(screen.getByText(/progress saved/i)).toBeInTheDocument();
+    });
+
+    // Step 8: Reload & verify saved transcript
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByText(/edited/i)).toBeInTheDocument();
+    });
+  });
+});
