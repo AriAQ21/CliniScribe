@@ -11,22 +11,8 @@ import { vi, describe, it, beforeEach, expect } from "vitest";
 import AuthPage from "@/pages/AuthPage";
 import AppointmentDetail from "@/pages/AppointmentDetail";
 
-// --- Mock useAuth ---
-const mockLogin = vi.fn();
-const mockLogout = vi.fn();
-
-vi.mock("@/hooks/useAuth", () => ({
-  useAuth: () => ({
-    login: mockLogin,
-    logout: mockLogout,
-    user: null,
-    isAuthenticated: false,
-    loading: false,
-  }),
-}));
-
-// --- Test app with routes ---
-const AppUnderTest = () => (
+// --- helpers ---
+const makeApp = () => (
   <MemoryRouter initialEntries={["/auth"]}>
     <Routes>
       <Route path="/auth" element={<AuthPage />} />
@@ -39,23 +25,36 @@ const AppUnderTest = () => (
           </div>
         }
       />
-      <Route
-        path="/appointment/:id"
-        element={<AppointmentDetail />}
-      />
+      <Route path="/appointment/:id" element={<AppointmentDetail />} />
     </Routes>
   </MemoryRouter>
 );
 
+// shared mocks
+let mockLogin: ReturnType<typeof vi.fn>;
+let mockLogout: ReturnType<typeof vi.fn>;
+
 describe("Authentication flow (integration)", () => {
   beforeEach(() => {
-    vi.resetAllMocks();
+    vi.resetModules(); // important so doMock takes effect
+    mockLogin = vi.fn();
+    mockLogout = vi.fn();
   });
 
   it("shows error for invalid credentials", async () => {
+    vi.doMock("@/hooks/useAuth", () => ({
+      useAuth: () => ({
+        login: mockLogin,
+        logout: mockLogout,
+        user: null,
+        isAuthenticated: false,
+        loading: false,
+      }),
+    }));
+
     mockLogin.mockResolvedValue({ error: "Invalid email or password" });
 
-    render(<AppUnderTest />);
+    render(makeApp());
     fireEvent.change(screen.getByLabelText(/email/i), {
       target: { value: "wrong@test.com" },
     });
@@ -67,13 +66,25 @@ describe("Authentication flow (integration)", () => {
     await waitFor(() =>
       expect(screen.getByText(/invalid email or password/i)).toBeInTheDocument()
     );
-    expect(screen.getByLabelText(/email/i)).toBeInTheDocument(); // still on auth UI
+    expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
   });
 
   it("redirects to dashboard on successful login", async () => {
-    mockLogin.mockResolvedValue({ user: { user_id: 1, email: "alice@email.com" } });
+    vi.doMock("@/hooks/useAuth", () => ({
+      useAuth: () => ({
+        login: mockLogin,
+        logout: mockLogout,
+        user: null,
+        isAuthenticated: false,
+        loading: false,
+      }),
+    }));
 
-    render(<AppUnderTest />);
+    mockLogin.mockResolvedValue({
+      user: { user_id: 1, email: "alice@email.com" },
+    });
+
+    render(makeApp());
     fireEvent.change(screen.getByLabelText(/email/i), {
       target: { value: "alice@email.com" },
     });
@@ -88,10 +99,20 @@ describe("Authentication flow (integration)", () => {
   });
 
   it("persists session across reloads (simulated)", async () => {
-    // First login
+    // first render: logged out
+    vi.doMock("@/hooks/useAuth", () => ({
+      useAuth: () => ({
+        login: mockLogin,
+        logout: mockLogout,
+        user: null,
+        isAuthenticated: false,
+        loading: false,
+      }),
+    }));
+
     mockLogin.mockResolvedValue({ user: { user_id: 1 } });
 
-    const { rerender } = render(<AppUnderTest />);
+    const { rerender } = render(makeApp());
     fireEvent.change(screen.getByLabelText(/email/i), {
       target: { value: "alice@email.com" },
     });
@@ -104,7 +125,7 @@ describe("Authentication flow (integration)", () => {
       expect(screen.getByText(/dashboard/i)).toBeInTheDocument()
     );
 
-    // Simulate reload: re-render with user still authenticated
+    // simulate reload: now authenticated
     vi.doMock("@/hooks/useAuth", () => ({
       useAuth: () => ({
         login: mockLogin,
@@ -115,13 +136,25 @@ describe("Authentication flow (integration)", () => {
       }),
     }));
 
-    rerender(<AppUnderTest />);
+    rerender(makeApp());
     await waitFor(() =>
       expect(screen.getByText(/dashboard/i)).toBeInTheDocument()
     );
   });
 
   it("redirects to intended page after login (or dashboard fallback)", async () => {
+    vi.doMock("@/hooks/useAuth", () => ({
+      useAuth: () => ({
+        login: mockLogin,
+        logout: mockLogout,
+        user: null,
+        isAuthenticated: false,
+        loading: false,
+      }),
+    }));
+
+    mockLogin.mockResolvedValue({ user: { user_id: 1 } });
+
     const TestApp = () => (
       <MemoryRouter initialEntries={["/appointment/123"]}>
         <Routes>
@@ -131,8 +164,6 @@ describe("Authentication flow (integration)", () => {
         </Routes>
       </MemoryRouter>
     );
-
-    mockLogin.mockResolvedValue({ user: { user_id: 1 } });
 
     render(<TestApp />);
 
@@ -144,7 +175,6 @@ describe("Authentication flow (integration)", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
-    // Accept either outcome
     await waitFor(() => {
       const onAppointment = screen.queryByText(/appointment 123/i);
       const onDashboard = screen.queryByText(/dashboard/i);
@@ -153,7 +183,6 @@ describe("Authentication flow (integration)", () => {
   });
 
   it("clears session on logout", async () => {
-    // Pretend user is already logged in
     vi.doMock("@/hooks/useAuth", () => ({
       useAuth: () => ({
         login: mockLogin,
@@ -164,7 +193,7 @@ describe("Authentication flow (integration)", () => {
       }),
     }));
 
-    render(<AppUnderTest />);
+    render(makeApp());
     fireEvent.click(screen.getByRole("button", { name: /logout/i }));
 
     expect(mockLogout).toHaveBeenCalled();
