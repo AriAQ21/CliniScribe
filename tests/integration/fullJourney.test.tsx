@@ -1,3 +1,4 @@
+// tests/integration/fullJourney.test.tsx
 // This tests:
 // * Login → Dashboard → appointments visible
 // * Open an appointment detail
@@ -35,6 +36,16 @@ describe("Full Clinician Journey (Integration)", () => {
   it("completes full flow: login → record → transcript → edit → save → reload", async () => {
     // Mock API responses for the full journey
     global.fetch = vi.fn()
+      // Imported appointments (called on dashboard load)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ appointments: [] }),
+      } as any)
+      // Dummy appointments (also called on dashboard load)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ appointments: [] }),
+      } as any)
       // Dashboard appointments
       .mockResolvedValueOnce({
         ok: true,
