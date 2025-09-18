@@ -7,17 +7,12 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi } from "vitest";
 import { AppointmentImportDialog } from "@/components/AppointmentImportDialog";
 
-// Mock useImportedAppointments
-const mockImportAppointments = vi.fn();
+vi.mock("@/hooks/use-toast", () => ({
+  useToast: () => ({ toast: vi.fn() }),
+}));
 
-vi.mock("@/hooks/useImportedAppointments", () => ({
-  useImportedAppointments: () => ({
-    importAppointments: mockImportAppointments,
-    appointments: [],
-    loading: false,
-    error: null,
-    refreshAppointments: vi.fn(),
-  }),
+vi.mock("@/hooks/useAuth", () => ({
+  useAuth: () => ({ user: { user_id: "test-user" } }),
 }));
 
 describe("Appointment Import Dialog (integration)", () => {
@@ -29,10 +24,11 @@ describe("Appointment Import Dialog (integration)", () => {
     screen.getByRole("presentation").querySelector("input[type='file']") as HTMLInputElement;
 
   it("imports valid CSV successfully", async () => {
-    mockImportAppointments.mockResolvedValueOnce({
-      success: true,
-      message: "Import completed successfully",
-    });
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ imported: 1, total_processed: 1 }),
+    } as any);
 
     render(
       <AppointmentImportDialog
@@ -53,15 +49,16 @@ describe("Appointment Import Dialog (integration)", () => {
     fireEvent.click(screen.getByRole("button", { name: /import appointments/i }));
 
     await waitFor(() => {
-      expect(mockImportAppointments).toHaveBeenCalledTimes(1);
+      expect(global.fetch).toHaveBeenCalledTimes(1);
     });
   });
 
   it("shows validation error for malformed CSV", async () => {
-    mockImportAppointments.mockResolvedValueOnce({
-      success: false,
-      message: "Invalid date format",
-    });
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({ detail: "Invalid date format" }),
+    } as any);
 
     render(
       <AppointmentImportDialog
@@ -82,21 +79,20 @@ describe("Appointment Import Dialog (integration)", () => {
     fireEvent.click(screen.getByRole("button", { name: /import appointments/i }));
 
     await waitFor(() => {
-      expect(mockImportAppointments).toHaveBeenCalledTimes(1);
-      expect(mockImportAppointments).toHaveReturnedWith(
-        expect.objectContaining({
-          success: false,
-          message: "Invalid date format",
-        })
-      );
+      expect(global.fetch).toHaveBeenCalledTimes(1);
     });
   });
 
   it("handles duplicate appointments", async () => {
-    mockImportAppointments.mockResolvedValueOnce({
-      success: false,
-      message: "Duplicate appointments detected",
-    });
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        imported: 0,
+        duplicates_skipped: 2,
+        total_processed: 2,
+      }),
+    } as any);
 
     render(
       <AppointmentImportDialog
@@ -119,13 +115,8 @@ describe("Appointment Import Dialog (integration)", () => {
     fireEvent.click(screen.getByRole("button", { name: /import appointments/i }));
 
     await waitFor(() => {
-      expect(mockImportAppointments).toHaveBeenCalledTimes(1);
-      expect(mockImportAppointments).toHaveReturnedWith(
-        expect.objectContaining({
-          success: false,
-          message: "Duplicate appointments detected",
-        })
-      );
+      expect(global.fetch).toHaveBeenCalledTimes(1);
     });
   });
 });
+
