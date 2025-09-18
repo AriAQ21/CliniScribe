@@ -5,7 +5,6 @@
 // * App redirects to /auth.
 // * Login page content (Sign In heading) is visible again.
 
-// tests/frontend/logout.integration.test.tsx
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi, describe, it, expect } from "vitest";
