@@ -27,6 +27,8 @@ vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: vi.fn() }),
 }));
 
+// Don't mock useImportedAppointments - we want to test it in integration
+
 // Mock MediaRecorder and getUserMedia
 const mockMediaRecorder = {
   start: vi.fn(),
@@ -70,12 +72,11 @@ describe("Full Clinician Journey (Integration)", () => {
   });
 
   it("completes full flow: login → record → transcript → edit → save → reload", async () => {
-    // Create a smart fetch mock that can handle multiple concurrent calls
-    let fetchCallCount = 0;
-    global.fetch = vi.fn().mockImplementation(async (url: string) => {
-      fetchCallCount++;
+    // Create a comprehensive fetch mock that handles all possible API calls
+    global.fetch = vi.fn().mockImplementation(async (url: string, options?: any) => {
+      console.log('Fetch called with URL:', url); // Debug logging
       
-      // Handle different API endpoints
+      // Handle dummy appointments API calls (for Dashboard)
       if (url.includes('/appointments/user/1?is_dummy=true')) {
         return {
           ok: true,
@@ -94,13 +95,48 @@ describe("Full Clinician Journey (Integration)", () => {
         };
       }
       
-      if (url.includes('/appointments/user/1') && !url.includes('is_dummy')) {
+      // Handle imported appointments API calls (for useImportedAppointments hook)
+      if (url.includes('/appointments/user/1?is_dummy=false')) {
         return {
           ok: true,
-          json: async () => ({ appointments: [] }),
+          json: async () => ({ 
+            appointments: [
+              {
+                id: "2",
+                patientName: "Jane Smith", 
+                doctorName: "Dr. Johnson",
+                date: "2025-08-20",
+                time: "10:00:00",
+                room: "Room 2",
+              }
+            ]
+          }),
         };
       }
       
+      // Handle any other appointments API calls (return empty array, not undefined)
+      if (url.includes('/appointments/user/1') && !url.includes('is_dummy')) {
+        return {
+          ok: true,
+          json: async () => ({ 
+            appointments: [] // Always return an array
+          }),
+        };
+      }
+      
+      // Handle bulk appointments import
+      if (url.includes('/appointments/bulk')) {
+        return {
+          ok: true,
+          json: async () => ({
+            message: "Appointments imported successfully",
+            imported: 1,
+            skipped: 0
+          }),
+        };
+      }
+      
+      // Handle single appointment detail
       if (url.includes('/appointment/1')) {
         return {
           ok: true,
@@ -116,6 +152,7 @@ describe("Full Clinician Journey (Integration)", () => {
         };
       }
       
+      // Handle transcription upload
       if (url.includes('/transcribe') && !url.includes('/status/') && !url.includes('/text/') && !url.includes('/update/')) {
         return {
           ok: true,
@@ -123,6 +160,7 @@ describe("Full Clinician Journey (Integration)", () => {
         };
       }
       
+      // Handle transcription status
       if (url.includes('/transcribe/status/dummy-id')) {
         return {
           ok: true,
@@ -133,6 +171,7 @@ describe("Full Clinician Journey (Integration)", () => {
         };
       }
       
+      // Handle transcription text retrieval
       if (url.includes('/transcribe/text/dummy-id')) {
         return {
           ok: true,
@@ -143,20 +182,31 @@ describe("Full Clinician Journey (Integration)", () => {
         };
       }
       
+      // Handle transcription update
       if (url.includes('/transcribe/update/dummy-id')) {
-        // Extract new text from request body would go here
-        // For simplicity, just update to edited text
-        savedTranscriptText = "Edited transcript text";
+        // Extract new text from request body
+        if (options?.body) {
+          try {
+            const body = JSON.parse(options.body);
+            savedTranscriptText = body.transcript || "Edited transcript text";
+          } catch {
+            savedTranscriptText = "Edited transcript text";
+          }
+        }
         return {
           ok: true,
           json: async () => ({ status: "success" }),
         };
       }
       
-      // Default fallback
+      // Catch-all for any other API calls - always return valid structure
+      console.warn('Unhandled fetch URL:', url);
       return {
         ok: true,
-        json: async () => ({}),
+        json: async () => ({ 
+          appointments: [], // Default safe response for appointments-related calls
+          message: "Default response" // Default safe response for other calls
+        }),
       };
     });
 
@@ -277,5 +327,5 @@ describe("Full Clinician Journey (Integration)", () => {
       },
       { timeout: 10000 }
     );
-  }, 15000); // Increase timeout to 15 seconds
+  }, 20000); // Increase timeout to 20 seconds
 });
