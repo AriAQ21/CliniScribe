@@ -1,21 +1,9 @@
 // tests/integration/auth-flow.test.tsx
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+
+// ✅ Mock supabase FIRST, before importing anything else
 import { vi, describe, it, beforeEach, expect } from "vitest";
 
-import AuthPage from "@/pages/AuthPage";
-import Dashboard from "@/pages/Index";
-
-// --- Mock navigate ---
-const mockNavigate = vi.fn();
-vi.mock("react-router-dom", async () => {
-  const actual = await vi.importActual<typeof import("react-router-dom")>(
-    "react-router-dom"
-  );
-  return { ...actual, useNavigate: () => mockNavigate };
-});
-
-// --- Mock supabase client ---
+// Mock supabase client
 vi.mock("@/integrations/supabase/client", () => {
   const mockSingle = vi.fn();
   const mockEq = vi.fn(() => ({ eq: mockEq, single: mockSingle }));
@@ -28,19 +16,30 @@ vi.mock("@/integrations/supabase/client", () => {
   };
 });
 
-// We'll re-import fresh mocks in each test
-let mockSingle: ReturnType<typeof vi.fn>;
+// ✅ Now safe to import everything else
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import AuthPage from "@/pages/AuthPage";
+import Dashboard from "@/pages/Index";
+
+// Mock navigate
+const mockNavigate = vi.fn();
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual<typeof import("react-router-dom")>(
+    "react-router-dom"
+  );
+  return { ...actual, useNavigate: () => mockNavigate };
+});
+
+// Extract our supabase mocks after the vi.mock is applied
+const { mockSingle } = (vi.mocked(
+  await import("@/integrations/supabase/client")
+).__mocks);
 
 describe("Authentication flow (integration)", () => {
-  beforeEach(async () => {
+  beforeEach(() => {
     vi.clearAllMocks();
-    vi.resetModules();
     localStorage.clear();
-
-    // dynamically import mocks so they’re fresh every time
-    const supabaseMock = (await import("@/integrations/supabase/client"))
-      .__mocks;
-    mockSingle = supabaseMock.mockSingle;
   });
 
   it("logs in successfully and navigates to dashboard", async () => {
