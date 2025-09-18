@@ -53,36 +53,36 @@ describe("Appointment Import Dialog (integration)", () => {
   });
 
   it("shows validation error for malformed CSV", async () => {
-    (global.fetch as any) = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 400,
-      json: async () => ({ message: "Invalid date format" }),
-    });
+  render(
+    <AppointmentImportDialog
+      open={true}
+      onOpenChange={() => {}}
+      onImportComplete={vi.fn()}
+    />
+  );
 
-    render(
-      <AppointmentImportDialog
-        open={true}
-        onOpenChange={() => {}}
-        onImportComplete={vi.fn()}
-      />
-    );
+  const file = new File(
+    ["Patient Name,Date,Time\nJohn Doe,32/13/2025,09:00"],
+    "invalid.csv",
+    { type: "text/csv" }
+  );
+  const input = screen
+    .getByRole("presentation")
+    .querySelector("input[type='file']") as HTMLInputElement;
 
-    const file = new File(
-      ["Patient Name,Date,Time\nJohn Doe,32/13/2025,09:00"],
-      "invalid.csv",
-      { type: "text/csv" }
-    );
-    const input = getFileInput();
-    fireEvent.change(input, { target: { files: [file] } });
+  fireEvent.change(input, { target: { files: [file] } });
 
-    await screen.findByText("invalid.csv");
+  await screen.findByText("invalid.csv");
 
-    fireEvent.click(screen.getByRole("button", { name: /import appointments/i }));
+  fireEvent.click(screen.getByRole("button", { name: /import appointments/i }));
 
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledTimes(1);
-    });
+  // Instead of fetch, we expect a validation message to appear
+  await waitFor(() => {
+    expect(
+      screen.getByText(/invalid date format/i)
+    ).toBeInTheDocument();
   });
+});
 
   it("handles duplicate appointments", async () => {
     (global.fetch as any) = vi.fn().mockResolvedValue({
