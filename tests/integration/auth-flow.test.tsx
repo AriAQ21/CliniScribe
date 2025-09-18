@@ -20,14 +20,19 @@ vi.mock("react-router-dom", async () => {
   };
 });
 
-// mock Supabase client
-const mockSelect = vi.fn();
-const mockEq = vi.fn(() => ({ single: mockSelect }));
-const mockFrom = vi.fn(() => ({ select: vi.fn(() => ({ eq: mockEq })) }));
+// mock Supabase client (all inside factory)
+let mockSelect: any;
+let mockFrom: any;
 
-vi.mock("@/integrations/supabase/client", () => ({
-  supabase: { from: mockFrom },
-}));
+vi.mock("@/integrations/supabase/client", () => {
+  mockSelect = vi.fn();
+  const mockEq = vi.fn(() => ({ single: mockSelect }));
+  mockFrom = vi.fn(() => ({ select: vi.fn(() => ({ eq: mockEq })) }));
+
+  return {
+    supabase: { from: mockFrom },
+  };
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
