@@ -46,7 +46,7 @@ describe("Full Clinician Journey (Integration)", () => {
         ok: true,
         json: async () => ({ appointments: [] }),
       } as any)
-      // Dashboard appointments
+      // Main appointments (also called on dashboard load)
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
