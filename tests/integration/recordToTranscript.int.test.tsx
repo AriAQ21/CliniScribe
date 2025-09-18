@@ -52,6 +52,29 @@ describe("Record → Upload → Transcript Flow (integration)", () => {
     vi.mock("@/hooks/useAuth", () => ({
       useAuth: () => ({ user: { user_id: 1 } }),
     }));
+
+    // Mock appointment details (so it doesn’t stay stuck on loading)
+    vi.mock("@/hooks/useAppointmentDetails", () => ({
+      useAppointmentDetails: () => ({
+        appointment: {
+          id: "123",
+          patient_name: "John Doe",
+          doctor_name: "Dr. Smith",
+          room: "Room 101",
+          appointment_date: "2025-08-19",
+          appointment_time: "09:00:00",
+          user_id: 1,
+        },
+        patientData: {
+          name: "John Doe",
+          dateOfBirth: "01/01/1970",
+          nhsNumber: "123",
+          time: "9:00 AM",
+        },
+        error: null,
+        loading: false,
+      }),
+    }));
   });
 
   it("records audio, uploads it, and displays transcript", async () => {
@@ -93,10 +116,14 @@ describe("Record → Upload → Transcript Flow (integration)", () => {
       </MemoryRouter>
     );
 
-    // new
-    fireEvent.click(
-      screen.getByRole("checkbox", { name: /patient has given consent/i })
-    );
+    // wait until appointment details load before interacting
+    await screen.findByText(/appointment details/i);
+
+    // Tick consent checkbox
+    const consentBox = await screen.findByRole("checkbox", {
+      name: /patient has given consent for recording/i,
+    });
+    fireEvent.click(consentBox);
 
     // Start recording
     fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
@@ -106,9 +133,7 @@ describe("Record → Upload → Transcript Flow (integration)", () => {
     fireEvent.click(screen.getByRole("button", { name: /pause recording/i }));
 
     // Send for transcription
-    fireEvent.click(
-      screen.getByRole("button", { name: /send for transcription/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /send for transcription/i }));
 
     // Transcript appears
     await waitFor(() =>
