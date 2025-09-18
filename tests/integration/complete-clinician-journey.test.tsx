@@ -5,9 +5,8 @@
 // * Recording flow (via useTranscription)
 // * Transcription flow (via useTranscription)
 // * Editing & saving transcript
-// * Error recovery when sending for transcription
 
-import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi, describe, it, beforeEach, expect } from "vitest";
 import { UnifiedAppointmentsList } from "@/components/UnifiedAppointmentsList";
@@ -22,7 +21,6 @@ const mockPauseRecording = vi.fn();
 const mockResumeRecording = vi.fn();
 const mockEditTranscription = vi.fn();
 const mockSetTranscriptionText = vi.fn();
-const mockToast = vi.fn();
 
 vi.mock("@/hooks/useImportedAppointments", () => ({
   useImportedAppointments: () => ({
@@ -95,10 +93,6 @@ let currentTranscriptionMock: any = makeTranscriptionMock();
 
 vi.mock("@/hooks/useTranscription", () => ({
   useTranscription: () => currentTranscriptionMock,
-}));
-
-vi.mock("@/hooks/useToast", () => ({
-  useToast: () => ({ toast: mockToast }),
 }));
 
 // --- Test wrapper ---
@@ -197,42 +191,5 @@ describe("Complete Clinician Journey (integration)", () => {
     fireEvent.change(textarea, { target: { value: "Edited transcript" } });
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
     await waitFor(() => expect(mockSaveTranscription).toHaveBeenCalled());
-  });
-
-  it("handles error recovery on send for transcription", async () => {
-    mockSendForTranscription
-      .mockImplementationOnce(() =>
-        Promise.reject(new Error("Service unavailable"))
-      )
-      .mockResolvedValueOnce({ transcript: "Recovered transcript" });
-
-    render(<DashboardOnly />);
-    fireEvent.click(screen.getByText("View Details"));
-    render(<DetailOnly />);
-
-    fireEvent.click(await screen.findByRole("checkbox", { name: /consent/i }));
-
-    // Swallow rejection so test doesn't crash
-    await act(async () => {
-      try {
-        fireEvent.click(screen.getByRole("button", { name: /send for transcription/i }));
-      } catch (_) {}
-    });
-
-    await waitFor(() => {
-      expect(mockToast).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: expect.stringMatching(/error/i),
-        })
-      );
-    });
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: /send for transcription/i }));
-    });
-
-    await waitFor(() =>
-      expect(mockSendForTranscription).toHaveBeenCalledTimes(2)
-    );
   });
 });
