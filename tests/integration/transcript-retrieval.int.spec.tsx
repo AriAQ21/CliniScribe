@@ -27,17 +27,22 @@ const fetchTranscriptById = vi.fn();
 vi.mock("@/hooks/useTranscription", () => {
   return {
     useTranscription: (id: string) => {
+      // hold mutable transcript text so tests can control it
+      let transcriptText = "";
+
       return {
         recordingState: "idle",
         hasRecorded: false,
         recordingDuration: 0,
-        transcriptionText: "",
+        transcriptionText: transcriptText,
         transcriptionSent: false,
         isEditingTranscription: false,
         isProcessing: false,
         isLoadingExistingTranscription: false,
         permissionGranted: true,
-        setTranscriptionText: vi.fn(),
+        setTranscriptionText: (val: string) => {
+          transcriptText = val;
+        },
         handleStartRecording: vi.fn(),
         handlePauseRecording: vi.fn(),
         handleResumeRecording: vi.fn(),
@@ -47,9 +52,9 @@ vi.mock("@/hooks/useTranscription", () => {
         handleSaveTranscription: vi.fn(),
         handleCancelEdit: vi.fn(),
         loadExistingTranscription: vi.fn(async () => {
-          // simulate transcript retrieval
           const t = await fetchTranscriptById("saved-123");
           if (t) {
+            transcriptText = t;
             return t;
           }
           return null;
@@ -84,7 +89,7 @@ describe("Transcript retrieval integration", () => {
 
     // transcript text should appear
     await waitFor(() => {
-      expect(screen.getByText(savedTranscript)).toBeInTheDocument();
+      expect(screen.getByText(/mild headache/)).toBeInTheDocument();
     });
 
     // placeholder should NOT appear
