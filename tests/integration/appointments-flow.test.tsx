@@ -3,8 +3,6 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi, describe, it, beforeEach, expect } from "vitest";
 import { UnifiedAppointmentsList } from "@/components/UnifiedAppointmentsList";
 import AppointmentDetail from "@/pages/AppointmentDetail";
-import { createMemoryHistory } from "history";
-import { Router } from "react-router-dom";
 
 // --- Mock hooks ---
 vi.mock("@/hooks/useAuth", () => ({
@@ -70,82 +68,79 @@ vi.mock("@/hooks/useTranscription", () => ({
   }),
 }));
 
+// --- Mock react-router navigation ---
+const mockedNavigate = vi.fn();
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual<typeof import("react-router-dom")>(
+    "react-router-dom"
+  );
+  return {
+    ...actual,
+    useNavigate: () => mockedNavigate,
+  };
+});
+
+// --- Test wrapper ---
+const AppUnderTest = () => (
+  <MemoryRouter initialEntries={["/dashboard"]}>
+    <Routes>
+      <Route
+        path="/dashboard"
+        element={
+          <UnifiedAppointmentsList
+            dummyAppointments={[]}
+            importedAppointments={[
+              {
+                id: "1",
+                patientName: "John Doe",
+                doctorName: "Dr. Smith",
+                room: "Room 101",
+                date: "2025-08-19",
+                time: "09:00",
+              },
+            ]}
+            selectedDate={new Date("2025-08-19")}
+          />
+        }
+      />
+      <Route path="/appointment/:id" element={<AppointmentDetail />} />
+    </Routes>
+  </MemoryRouter>
+);
+
 describe("Appointments flow (integration)", () => {
   beforeEach(() => {
-    vi.resetAllMocks();
+    vi.clearAllMocks();
   });
 
   it("user can see today's appointments", () => {
-    render(
-      <MemoryRouter initialEntries={["/dashboard"]}>
-        <Routes>
-          <Route
-            path="/dashboard"
-            element={
-              <UnifiedAppointmentsList
-                dummyAppointments={[]}
-                importedAppointments={[
-                  {
-                    id: "1",
-                    patientName: "John Doe",
-                    doctorName: "Dr. Smith",
-                    room: "Room 101",
-                    date: "2025-08-19",
-                    time: "09:00",
-                  },
-                ]}
-                selectedDate={new Date("2025-08-19")}
-              />
-            }
-          />
-        </Routes>
-      </MemoryRouter>
-    );
+    render(<AppUnderTest />);
     expect(screen.getByText("John Doe")).toBeInTheDocument();
   });
 
   it("user can navigate to appointment details and see transcript placeholder", async () => {
-    const history = createMemoryHistory({ initialEntries: ["/dashboard"] });
+    render(<AppUnderTest />);
 
-    render(
-      <Router location={history.location} navigator={history}>
-        <Routes>
-          <Route
-            path="/dashboard"
-            element={
-              <UnifiedAppointmentsList
-                dummyAppointments={[]}
-                importedAppointments={[
-                  {
-                    id: "1",
-                    patientName: "John Doe",
-                    doctorName: "Dr. Smith",
-                    room: "Room 101",
-                    date: "2025-08-19",
-                    time: "09:00",
-                  },
-                ]}
-                selectedDate={new Date("2025-08-19")}
-              />
-            }
-          />
-          <Route path="/appointment/:id" element={<AppointmentDetail />} />
-        </Routes>
-      </Router>
-    );
-
-    // Click button
+    // Click "View Details"
     fireEvent.click(screen.getByRole("button", { name: /view details/i }));
 
-    // Manually push route because mock list doesn’t navigate
-    history.push("/appointment/1");
+    // Simulate navigate being called
+    expect(mockedNavigate).toHaveBeenCalledWith("/appointment/1");
 
-    // Now AppointmentDetail should render
+    // Render the AppointmentDetail manually (since navigate is mocked)
+    render(
+      <MemoryRouter initialEntries={["/appointment/1"]}>
+        <Routes>
+          <Route path="/appointment/:id" element={<AppointmentDetail />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    // Now check AppointmentDetail content
     expect(
       await screen.findByText(/Appointment Details/i, { exact: false })
     ).toBeInTheDocument();
 
-    // Probe for transcript UI
     const probes = [
       /consent/i,
       /start recording/i,
@@ -154,10 +149,10 @@ describe("Appointments flow (integration)", () => {
       /send for transcription/i,
       /transcript|transcription/i,
     ];
+
     const found = probes.some((pattern) =>
       screen.queryByText(pattern, { exact: false })
     );
     expect(found).toBe(true);
   });
 });
-
