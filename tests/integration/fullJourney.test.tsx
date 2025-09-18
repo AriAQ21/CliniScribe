@@ -9,7 +9,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi, describe, it, beforeEach, expect } from "vitest";
-import Dashboard from "@/pages/Dashboard";
+import Dashboard from "@/pages/Index";
 import AppointmentDetail from "@/pages/AppointmentDetail";
 
 // --- Mocks ---
