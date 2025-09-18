@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi, describe, it, beforeEach, expect } from "vitest";
 
 import AuthPage from "@/pages/AuthPage";
-import Dashboard from "@/pages/Index"; 
+import Dashboard from "@/pages/Index"; // your dashboard page
 
 // --- Mock useNavigate ---
 const mockNavigate = vi.fn();
@@ -19,14 +19,23 @@ vi.mock("react-router-dom", async () => {
 });
 
 // --- Mock Supabase client ---
-const mockSingle = vi.fn();
-const mockEq = vi.fn(() => ({ eq: mockEq, single: mockSingle }));
-const mockSelect = vi.fn(() => ({ eq: mockEq }));
-const mockFrom = vi.fn(() => ({ select: mockSelect }));
+vi.mock("@/integrations/supabase/client", () => {
+  const mockSingle = vi.fn();
+  const mockEq = vi.fn(() => ({ eq: mockEq, single: mockSingle }));
+  const mockSelect = vi.fn(() => ({ eq: mockEq }));
+  const mockFrom = vi.fn(() => ({ select: mockSelect }));
 
-vi.mock("@/integrations/supabase/client", () => ({
-  supabase: { from: mockFrom },
-}));
+  return {
+    supabase: { from: mockFrom },
+    // expose helpers so we can control them in tests
+    __mocks: { mockFrom, mockSelect, mockEq, mockSingle },
+  };
+});
+
+// pull out the mocks so we can use them in tests
+const { mockSingle } = (vi.mocked(
+  await import("@/integrations/supabase/client")
+).__mocks);
 
 describe("Authentication flow (integration)", () => {
   beforeEach(() => {
@@ -35,7 +44,6 @@ describe("Authentication flow (integration)", () => {
   });
 
   it("logs in successfully and shows dashboard", async () => {
-    // Arrange: mock Supabase to return a valid user
     mockSingle.mockResolvedValueOnce({
       data: {
         user_id: 1,
@@ -57,7 +65,6 @@ describe("Authentication flow (integration)", () => {
       </MemoryRouter>
     );
 
-    // Act: fill form + submit
     fireEvent.change(screen.getByLabelText(/email/i), {
       target: { value: "alice@email.com" },
     });
@@ -66,7 +73,6 @@ describe("Authentication flow (integration)", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
 
-    // Assert: navigates and dashboard appears
     await waitFor(() =>
       expect(mockNavigate).toHaveBeenCalledWith("/dashboard")
     );
@@ -83,10 +89,8 @@ describe("Authentication flow (integration)", () => {
       </MemoryRouter>
     );
 
-    // Act: click logout button
     fireEvent.click(screen.getByRole("button", { name: /logout/i }));
 
-    // Assert: navigates to auth page
     await waitFor(() =>
       expect(mockNavigate).toHaveBeenCalledWith("/auth")
     );
