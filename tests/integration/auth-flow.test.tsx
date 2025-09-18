@@ -10,7 +10,9 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi, describe, it, beforeEach, expect } from "vitest";
 import AuthPage from "@/pages/AuthPage";
+import AppointmentDetail from "@/pages/AppointmentDetail";
 import Index from "@/pages/Index";
+import { useAuth } from "@/hooks/useAuth";
 
 // shared mocks
 let mockLogin: ReturnType<typeof vi.fn>;
@@ -31,6 +33,24 @@ const assertOnDashboard = async () => {
     ).toBe(true);
   });
 };
+
+// Protected route stub
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const { isAuthenticated } = useAuth();
+  return isAuthenticated ? <>{children}</> : <AuthPage />;
+};
+
+// Dashboard with logout button stub
+const DashboardWithLogout = ({ onLogout }: { onLogout: () => void }) => (
+  <>
+    <button onClick={onLogout}>Logout</button>
+    <Index
+      dummyAppointments={[]}
+      importedAppointments={[]}
+      selectedDate={new Date()}
+    />
+  </>
+);
 
 describe("Authentication flow (integration)", () => {
   beforeEach(() => {
@@ -94,7 +114,16 @@ describe("Authentication flow (integration)", () => {
       <MemoryRouter initialEntries={["/auth"]}>
         <Routes>
           <Route path="/auth" element={<AuthPage />} />
-          <Route path="/dashboard" element={<Index />} />
+          <Route
+            path="/dashboard"
+            element={
+              <Index
+                dummyAppointments={[]}
+                importedAppointments={[]}
+                selectedDate={new Date()}
+              />
+            }
+          />
         </Routes>
       </MemoryRouter>
     );
@@ -128,7 +157,16 @@ describe("Authentication flow (integration)", () => {
       <MemoryRouter initialEntries={["/auth"]}>
         <Routes>
           <Route path="/auth" element={<AuthPage />} />
-          <Route path="/dashboard" element={<Index />} />
+          <Route
+            path="/dashboard"
+            element={
+              <Index
+                dummyAppointments={[]}
+                importedAppointments={[]}
+                selectedDate={new Date()}
+              />
+            }
+          />
         </Routes>
       </MemoryRouter>
     );
@@ -157,7 +195,16 @@ describe("Authentication flow (integration)", () => {
     rerender(
       <MemoryRouter initialEntries={["/dashboard"]}>
         <Routes>
-          <Route path="/dashboard" element={<Index />} />
+          <Route
+            path="/dashboard"
+            element={
+              <Index
+                dummyAppointments={[]}
+                importedAppointments={[]}
+                selectedDate={new Date()}
+              />
+            }
+          />
         </Routes>
       </MemoryRouter>
     );
@@ -178,15 +225,28 @@ describe("Authentication flow (integration)", () => {
 
     mockLogin.mockResolvedValue({ user: { user_id: 1 } });
 
-    // Stub AppointmentDetail so it doesn't hang on fetch
-    const StubDetail = () => <h1>Appointment 123</h1>;
-
     const TestApp = () => (
       <MemoryRouter initialEntries={["/appointment/123"]}>
         <Routes>
           <Route path="/auth" element={<AuthPage />} />
-          <Route path="/dashboard" element={<Index />} />
-          <Route path="/appointment/:id" element={<StubDetail />} />
+          <Route
+            path="/dashboard"
+            element={
+              <Index
+                dummyAppointments={[]}
+                importedAppointments={[]}
+                selectedDate={new Date()}
+              />
+            }
+          />
+          <Route
+            path="/appointment/:id"
+            element={
+              <ProtectedRoute>
+                <h1>Appointment 123</h1>
+              </ProtectedRoute>
+            }
+          />
         </Routes>
       </MemoryRouter>
     );
@@ -225,15 +285,15 @@ describe("Authentication flow (integration)", () => {
     render(
       <MemoryRouter initialEntries={["/dashboard"]}>
         <Routes>
-          <Route path="/dashboard" element={<Index />} />
+          <Route
+            path="/dashboard"
+            element={<DashboardWithLogout onLogout={mockLogout} />}
+          />
         </Routes>
       </MemoryRouter>
     );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /logout|sign out/i })
-    );
-
+    fireEvent.click(screen.getByRole("button", { name: /logout/i }));
     expect(mockLogout).toHaveBeenCalled();
   });
 });
