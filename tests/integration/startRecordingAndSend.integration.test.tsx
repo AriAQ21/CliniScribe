@@ -1,11 +1,11 @@
-This tests:
-* Mock transcription endpoints (/transcribe, /transcribe/status/:id, /transcribe/text/:id)
-* Consent + recording flow:
-* Start recording → see "Recording in progress"
-* Pause recording
-* Send for transcription
-* See "Transcription in progress..."
-* Then see the transcript text appear
+// This tests:
+// * Mock transcription endpoints (/transcribe, /transcribe/status/:id, /transcribe/text/:id)
+// * Consent + recording flow:
+// * Start recording → see "Recording in progress"
+// * Pause recording
+// * Send for transcription
+// * See "Transcription in progress..."
+// * Then see the transcript text appear
 
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
