@@ -2,7 +2,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import AuthPage from "@/pages/AuthPage";
-import Dashboard from "@/pages/Dashboard"; // <- whatever page user sees after login
+import Dashboard from "@/pages/Index"; 
 import { vi, describe, it, beforeEach, expect } from "vitest";
 
 // --- Mock backend fetch calls ---
