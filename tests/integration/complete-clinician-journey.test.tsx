@@ -1,7 +1,7 @@
 // This tests:
 // * CSV import (via useImportedAppointments)
 // * Dashboard → Appointment detail navigation
-// * Recording flow (via useAudioRecording)
+// * Recording flow (via useTranscription)
 // * Transcription flow (via useTranscription)
 // * Editing & saving transcript
 // * Error recovery when sending for transcription
@@ -18,6 +18,7 @@ const mockSendForTranscription = vi.fn();
 const mockSaveTranscription = vi.fn();
 const mockStartRecording = vi.fn();
 const mockPauseRecording = vi.fn();
+const mockResumeRecording = vi.fn();
 const mockEditTranscription = vi.fn();
 const mockSetTranscriptionText = vi.fn();
 
@@ -51,48 +52,44 @@ vi.mock("@/hooks/useAppointmentDetails", () => ({
   useAppointmentDetails: () => ({
     appointment: {
       id: "1",
-      patient_name: "John Doe",
-      doctor_name: "Dr. Smith",
       room: "Room 101",
-      appointment_date: "2025-08-19",
-      appointment_time: "09:00:00",
-      user_id: 123,
     },
     patientData: {
       name: "John Doe",
       dateOfBirth: "01/01/1970",
       nhsNumber: "123",
+      time: "09:00 AM",
     },
     error: null,
     loading: false,
   }),
 }));
 
-// Default mock of transcription
-vi.mock("@/hooks/useTranscription", () => ({
-  useTranscription: () => ({
-    transcriptionText: "Patient reports headache symptoms for the past week.",
-    isEditingTranscription: false,
-    isProcessing: false,
-    isLoadingExistingTranscription: false,
-    handleEditTranscription: mockEditTranscription,
-    handleSaveTranscription: mockSaveTranscription,
-    handleCancelEdit: vi.fn(),
-    handleSendForTranscription: mockSendForTranscription,
-    setTranscriptionText: mockSetTranscriptionText,
-  }),
-}));
+// Default transcription mock — can be overridden per test
+const makeTranscriptionMock = (overrides = {}) => ({
+  recordingState: "idle",
+  hasRecorded: true,
+  recordingDuration: 0,
+  transcriptionText: "Patient reports headache symptoms for the past week.",
+  transcriptionSent: false,
+  isEditingTranscription: false,
+  isProcessing: false,
+  isLoadingExistingTranscription: false,
+  permissionGranted: true,
+  setTranscriptionText: mockSetTranscriptionText,
+  handleStartRecording: mockStartRecording,
+  handlePauseRecording: mockPauseRecording,
+  handleResumeRecording: mockResumeRecording,
+  handleSendForTranscription: mockSendForTranscription,
+  handleEditTranscription: mockEditTranscription,
+  handleSaveTranscription: mockSaveTranscription,
+  handleCancelEdit: vi.fn(),
+  handleUploadFileForTranscription: vi.fn(),
+  ...overrides,
+});
 
-vi.mock("@/hooks/useAudioRecording", () => ({
-  useAudioRecording: () => ({
-    recordingState: "idle",
-    hasRecorded: false,
-    audioBlob: null,
-    startRecording: mockStartRecording,
-    pauseRecording: mockPauseRecording,
-    resumeRecording: vi.fn(),
-    stopRecording: vi.fn(),
-  }),
+vi.mock("@/hooks/useTranscription", () => ({
+  useTranscription: () => makeTranscriptionMock(),
 }));
 
 // --- Test wrapper ---
@@ -142,20 +139,25 @@ describe("Complete Clinician Journey (integration)", () => {
     render(<TestApp />);
     fireEvent.click(screen.getByText("View Details"));
 
-    // must tick consent first
+    // tick consent
     fireEvent.click(
-      screen.getByRole("checkbox", { name: /patient has given consent/i })
+      screen.getByRole("checkbox", {
+        name: /patient has given consent for recording/i,
+      })
     );
 
     fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
     expect(mockStartRecording).toHaveBeenCalled();
 
+    // simulate pause
     fireEvent.click(screen.getByRole("button", { name: /pause recording/i }));
     expect(mockPauseRecording).toHaveBeenCalled();
 
-    // hasRecorded must be true for this button
+    // send for transcription
     mockSendForTranscription.mockResolvedValue({});
-    fireEvent.click(screen.getByText(/send for transcription/i));
+    fireEvent.click(
+      screen.getByRole("button", { name: /send for transcription/i })
+    );
 
     await waitFor(() => expect(mockSendForTranscription).toHaveBeenCalled());
   });
@@ -165,7 +167,9 @@ describe("Complete Clinician Journey (integration)", () => {
     fireEvent.click(screen.getByText("View Details"));
 
     await waitFor(() =>
-      expect(screen.getByText(/headache symptoms/i)).toBeInTheDocument()
+      expect(
+        screen.getByText(/headache symptoms/i)
+      ).toBeInTheDocument()
     );
   });
 
@@ -173,17 +177,16 @@ describe("Complete Clinician Journey (integration)", () => {
     render(<TestApp />);
     fireEvent.click(screen.getByText("View Details"));
 
-    fireEvent.click(screen.getByText(/edit transcription/i));
+    fireEvent.click(screen.getByRole("button", { name: /edit transcription/i }));
 
-    const textarea = screen.getByRole("textbox");
+    const textarea = await screen.findByRole("textbox");
     fireEvent.change(textarea, { target: { value: "Edited transcript" } });
 
-    fireEvent.click(screen.getByText(/save/i));
+    fireEvent.click(screen.getByRole("button", { name: /save/i }));
     expect(mockSaveTranscription).toHaveBeenCalled();
   });
 
   it("handles error recovery on send for transcription", async () => {
-    // Force hasRecorded=true so button appears
     mockSendForTranscription
       .mockRejectedValueOnce(new Error("Service unavailable"))
       .mockResolvedValueOnce({ transcript: "Recovered transcript" });
@@ -192,16 +195,22 @@ describe("Complete Clinician Journey (integration)", () => {
     fireEvent.click(screen.getByText("View Details"));
 
     fireEvent.click(
-      screen.getByRole("checkbox", { name: /patient has given consent/i })
+      screen.getByRole("checkbox", {
+        name: /patient has given consent for recording/i,
+      })
     );
 
-    fireEvent.click(screen.getByText(/send for transcription/i));
+    fireEvent.click(
+      screen.getByRole("button", { name: /send for transcription/i })
+    );
 
     await waitFor(() =>
       expect(screen.getByText(/service unavailable/i)).toBeInTheDocument()
     );
 
-    fireEvent.click(screen.getByText(/send for transcription/i));
+    fireEvent.click(
+      screen.getByRole("button", { name: /send for transcription/i })
+    );
     await waitFor(() =>
       expect(mockSendForTranscription).toHaveBeenCalledTimes(2)
     );
