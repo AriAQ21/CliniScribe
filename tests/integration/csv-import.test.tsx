@@ -25,6 +25,9 @@ describe("Appointment Import Dialog (integration)", () => {
     vi.resetAllMocks();
   });
 
+  const getFileInput = () =>
+    screen.getByRole("presentation").querySelector("input[type='file']") as HTMLInputElement;
+
   it("imports valid CSV successfully", async () => {
     mockImportAppointments.mockResolvedValueOnce({
       success: true,
@@ -32,11 +35,11 @@ describe("Appointment Import Dialog (integration)", () => {
     });
 
     render(
-      <AppointmentImportDialog 
-        open={true} 
-        onOpenChange={() => {}} 
-        onImportComplete={vi.fn()} 
-        />
+      <AppointmentImportDialog
+        open={true}
+        onOpenChange={() => {}}
+        onImportComplete={vi.fn()}
+      />
     );
 
     const file = new File(
@@ -44,12 +47,10 @@ describe("Appointment Import Dialog (integration)", () => {
       "appointments.csv",
       { type: "text/csv" }
     );
-    const input = screen.getByLabelText(/upload/i);
+    const input = getFileInput();
     fireEvent.change(input, { target: { files: [file] } });
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /import appointments/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /import appointments/i }));
 
     await waitFor(() => {
       expect(mockImportAppointments).toHaveBeenCalledTimes(1);
@@ -62,19 +63,23 @@ describe("Appointment Import Dialog (integration)", () => {
       message: "Invalid date format",
     });
 
-    render(<AppointmentImportDialog onImportComplete={vi.fn()} />);
+    render(
+      <AppointmentImportDialog
+        open={true}
+        onOpenChange={() => {}}
+        onImportComplete={vi.fn()}
+      />
+    );
 
     const file = new File(
       ["Patient Name,Date,Time\nJohn Doe,32/13/2025,09:00"],
       "invalid.csv",
       { type: "text/csv" }
     );
-    const input = screen.getByLabelText(/upload/i);
+    const input = getFileInput();
     fireEvent.change(input, { target: { files: [file] } });
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /import appointments/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /import appointments/i }));
 
     await waitFor(() => {
       expect(mockImportAppointments).toHaveBeenCalledTimes(1);
@@ -93,7 +98,13 @@ describe("Appointment Import Dialog (integration)", () => {
       message: "Duplicate appointments detected",
     });
 
-    render(<AppointmentImportDialog onImportComplete={vi.fn()} />);
+    render(
+      <AppointmentImportDialog
+        open={true}
+        onOpenChange={() => {}}
+        onImportComplete={vi.fn()}
+      />
+    );
 
     const file = new File(
       [
@@ -102,12 +113,10 @@ describe("Appointment Import Dialog (integration)", () => {
       "dupes.csv",
       { type: "text/csv" }
     );
-    const input = screen.getByLabelText(/upload/i);
+    const input = getFileInput();
     fireEvent.change(input, { target: { files: [file] } });
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /import appointments/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /import appointments/i }));
 
     await waitFor(() => {
       expect(mockImportAppointments).toHaveBeenCalledTimes(1);
