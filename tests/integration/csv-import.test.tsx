@@ -1,35 +1,28 @@
+// tests/integration/csv-import.test.tsx
 // This tests:
-// * Valid CSV → success toast/status message.
-// * Malformed CSV (invalid date) → validation error message.
-// * Duplicates → “duplicate skipped” message.
+// * Valid CSV → success API call.
+// * Malformed CSV → validation error (API error).
+// * Duplicates → duplicate skipped (API error).
 
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { vi } from "vitest";
 import { AppointmentImportDialog } from "@/components/AppointmentImportDialog";
 
-vi.mock("@/hooks/use-toast", () => ({
-  useToast: () => ({ toast: vi.fn() }),
-}));
-
-vi.mock("@/hooks/useAuth", () => ({
-  useAuth: () => ({ user: { user_id: "test-user" } }),
-}));
+function getFileInput() {
+  return screen.getByRole("presentation").querySelector("input[type='file']") as HTMLInputElement;
+}
 
 describe("Appointment Import Dialog (integration)", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-  });
-
-  const getFileInput = () =>
-    screen.getByRole("presentation").querySelector("input[type='file']") as HTMLInputElement;
-
-  it("imports valid CSV successfully", async () => {
+    // default stub for fetch
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
-      status: 200,
       json: async () => ({ imported: 1, total_processed: 1 }),
     } as any);
+  });
 
+  it("imports valid CSV successfully", async () => {
     render(
       <AppointmentImportDialog
         open={true}
@@ -46,6 +39,10 @@ describe("Appointment Import Dialog (integration)", () => {
     const input = getFileInput();
     fireEvent.change(input, { target: { files: [file] } });
 
+    // Wait until file is displayed
+    await screen.findByText("appointments.csv");
+
+    // Import
     fireEvent.click(screen.getByRole("button", { name: /import appointments/i }));
 
     await waitFor(() => {
@@ -54,11 +51,11 @@ describe("Appointment Import Dialog (integration)", () => {
   });
 
   it("shows validation error for malformed CSV", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    (global.fetch as any) = vi.fn().mockResolvedValue({
       ok: false,
       status: 400,
-      json: async () => ({ detail: "Invalid date format" }),
-    } as any);
+      json: async () => ({ message: "Invalid date format" }),
+    });
 
     render(
       <AppointmentImportDialog
@@ -76,6 +73,9 @@ describe("Appointment Import Dialog (integration)", () => {
     const input = getFileInput();
     fireEvent.change(input, { target: { files: [file] } });
 
+    // Wait for file name to appear
+    await screen.findByText("invalid.csv");
+
     fireEvent.click(screen.getByRole("button", { name: /import appointments/i }));
 
     await waitFor(() => {
@@ -84,15 +84,11 @@ describe("Appointment Import Dialog (integration)", () => {
   });
 
   it("handles duplicate appointments", async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        imported: 0,
-        duplicates_skipped: 2,
-        total_processed: 2,
-      }),
-    } as any);
+    (global.fetch as any) = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: async () => ({ message: "Duplicate appointments detected" }),
+    });
 
     render(
       <AppointmentImportDialog
@@ -112,6 +108,9 @@ describe("Appointment Import Dialog (integration)", () => {
     const input = getFileInput();
     fireEvent.change(input, { target: { files: [file] } });
 
+    // Wait for file name to appear
+    await screen.findByText("dupes.csv");
+
     fireEvent.click(screen.getByRole("button", { name: /import appointments/i }));
 
     await waitFor(() => {
@@ -119,4 +118,3 @@ describe("Appointment Import Dialog (integration)", () => {
     });
   });
 });
-
