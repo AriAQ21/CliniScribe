@@ -7,7 +7,7 @@
 // * Editing & saving transcript
 // * Error recovery when sending for transcription
 
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react"; 
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi, describe, it, beforeEach, expect } from "vitest";
 import { UnifiedAppointmentsList } from "@/components/UnifiedAppointmentsList";
@@ -240,6 +240,5 @@ describe("Complete Clinician Journey (integration)", () => {
       expect(mockSendForTranscription).toHaveBeenCalledTimes(2)
     );
   });
-
-
+});
 
