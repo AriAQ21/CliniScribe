@@ -4,7 +4,7 @@ import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { vi, describe, it, beforeEach, expect } from "vitest";
 
 import AuthPage from "@/pages/AuthPage";
-import Dashboard from "@/pages/Dashboard";
+import Dashboard from "@/pages/Index";
 
 // --- Mocks ---
 const mockNavigate = vi.fn();
