@@ -92,8 +92,9 @@ describe("Transcription Flow (integration)", () => {
       </MemoryRouter>
     );
 
-    // Consent
-    fireEvent.click(screen.getByLabelText(/patient has given consent/i));
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /patient has given consent/i })
+    );
 
     // Start recording
     fireEvent.click(screen.getByRole("button", { name: /start recording/i }));
