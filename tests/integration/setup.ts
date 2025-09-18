@@ -1,5 +1,5 @@
 // tests/integration/setup.ts
-
+import "@testing-library/jest-dom";
 // Ensure a clean DOM + storage before each test
 beforeEach(() => {
   localStorage.clear();
