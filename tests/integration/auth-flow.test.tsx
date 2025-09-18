@@ -11,7 +11,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { vi, describe, it, beforeEach, expect } from "vitest";
 import AuthPage from "@/pages/AuthPage";
 import AppointmentDetail from "@/pages/AppointmentDetail";
-import Index from "@/pages/index"; // dashboard with DashboardHeader
+import Index from "@/pages/Index"; // dashboard with DashboardHeader
 
 // shared mocks
 let mockLogin: ReturnType<typeof vi.fn>;
