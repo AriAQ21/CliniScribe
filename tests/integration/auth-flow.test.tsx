@@ -16,12 +16,14 @@ vi.mock("react-router-dom", async () => {
 
 // --- Mock useAuth hook ---
 const mockLogin = vi.fn();
+const mockLogout = vi.fn();
 let mockIsAuthenticated = false;
 let mockAuthLoading = false;
 
 vi.mock("@/hooks/useAuth", () => ({
   useAuth: () => ({
     login: mockLogin,
+    logout: mockLogout,
     isAuthenticated: mockIsAuthenticated,
     loading: mockAuthLoading,
   }),
@@ -47,7 +49,6 @@ describe("Authentication flow (integration)", () => {
       </MemoryRouter>
     );
 
-    // Fill in login form
     fireEvent.change(screen.getByLabelText(/email/i), {
       target: { value: "alice@email.com" },
     });
@@ -62,8 +63,11 @@ describe("Authentication flow (integration)", () => {
   });
 
   it("logs out successfully and navigates to auth page", async () => {
-    // Pretend user is logged in
     mockIsAuthenticated = true;
+    mockLogout.mockImplementation(() => {
+      mockIsAuthenticated = false;
+      mockNavigate("/auth");
+    });
 
     render(
       <MemoryRouter initialEntries={["/dashboard"]}>
