@@ -57,7 +57,6 @@ async def transcribe(
         location = appt_res.data.get("room") or room
         meeting_type = (appt_res.data.get("meeting_type") or "gp").lower()
 
-        # User role
         role_res = supabase.table("users") \
             .select("role") \
             .eq("user_id", int(user_id)) \
@@ -65,15 +64,14 @@ async def transcribe(
             .execute()
         role = (role_res.data or {}).get("role")
 
-        # Audio ID
+        # Generate audio_ID and convert to 16kHz WAV
         dt = datetime.strptime(f"{appt_date} {appt_time}", "%Y-%m-%d %H:%M:%S")
         timestamp = dt.strftime('%Y-%m-%dT%H-%M-%S-') + "000Z"
         audio_id = f"{user_id}_{meeting_type.upper()}_{timestamp}"
-
         original_filename = file.filename or "audio.wav"
-
-        # Convert + metadata
         converted_path = convert_to_wav_16k(file, audio_id)
+       
+        # Build metadata and save JSON
         metadata = {
             "audio_id": audio_id,
             "status": "queued",
