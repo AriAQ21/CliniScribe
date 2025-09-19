@@ -37,11 +37,11 @@ async def transcribe(
     appointment_id: str = Form(...),
     user_id: str = Form(...),
     room: str = Form(...),
-    appointment_time: str = Form(None),   # <-- added so tests don’t fail
+    appointment_time: str = Form(None), 
     manual_tags: str = Form(None)
 ):
     try:
-        # 1️⃣ Get appointment info from Supabase
+        # Get appointment info from Supabase
         supabase = get_supabase_client()
         appt_res = supabase.table("appointments") \
             .select("appointment_date, appointment_time, room, meeting_type") \
