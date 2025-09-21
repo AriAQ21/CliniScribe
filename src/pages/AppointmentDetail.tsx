@@ -33,14 +33,14 @@ import {
 } from "lucide-react";
 
 const AppointmentDetail = () => {
-  console.log('🧪 AppointmentDetail component starting to render');
+  console.log('AppointmentDetail component starting to render');
   
   const { id } = useParams();
   const navigate = useNavigate();
   
-  console.log('🧪 AppointmentDetail: Calling useAuth hook');
+  console.log('AppointmentDetail: Calling useAuth hook');
   const { user } = useAuth();
-  console.log('🧪 AppointmentDetail: useAuth returned:', { user });
+  console.log('AppointmentDetail: useAuth returned:', { user });
 
   const [consentGiven, setConsentGiven] = useState(false);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
@@ -53,9 +53,9 @@ const AppointmentDetail = () => {
   const [currentTagLabel, setCurrentTagLabel] = useState("");
   const [currentTagContent, setCurrentTagContent] = useState("");
 
-  console.log('🧪 AppointmentDetail: Getting appointment details for id:', id);
+  console.log('AppointmentDetail: Getting appointment details for id:', id);
   const { appointment, patientData, loading, error } = useAppointmentDetails(id || "");
-  console.log('🧪 AppointmentDetail: useAppointmentDetails returned:', { appointment, patientData, loading, error });
+  console.log('AppointmentDetail: useAppointmentDetails returned:', { appointment, patientData, loading, error });
 
   // Microphone selection
   const {
@@ -167,7 +167,7 @@ const AppointmentDetail = () => {
     setCurrentTagContent("");
   };
 
-  console.log('🧪 AppointmentDetail: About to render main component');
+  console.log('AppointmentDetail: About to render main component');
   
   return (
     <ErrorBoundary>
