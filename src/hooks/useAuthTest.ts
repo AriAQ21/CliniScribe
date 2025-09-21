@@ -25,12 +25,12 @@ export const useAuthTest = () => {
 
   // Simplified auth check for tests
   useEffect(() => {
-    console.log('🧪 useAuthTest: Starting auth check');
+    console.log('useAuthTest: Starting auth check');
     
     const checkAuth = () => {
       try {
         const userId = localStorage.getItem('user_id');
-        console.log('🧪 useAuthTest: user_id from localStorage:', userId);
+        console.log('useAuthTest: user_id from localStorage:', userId);
         
         if (userId === '123') {
           const mockUser: User = {
@@ -41,14 +41,14 @@ export const useAuthTest = () => {
             location: 'Room 101',
             email: 'alice@email.com'
           };
-          console.log('🧪 useAuthTest: Setting mock user:', mockUser);
+          console.log('useAuthTest: Setting mock user:', mockUser);
           setAuthState({ user: mockUser, loading: false });
         } else {
-          console.log('🧪 useAuthTest: No valid user_id, user not authenticated');
+          console.log('useAuthTest: No valid user_id, user not authenticated');
           setAuthState({ user: null, loading: false });
         }
       } catch (error) {
-        console.error('🧪 useAuthTest: Error during auth check:', error);
+        console.error('useAuthTest: Error during auth check:', error);
         setAuthState({ user: null, loading: false });
       }
     };
@@ -58,7 +58,7 @@ export const useAuthTest = () => {
   }, []);
 
   const login = async (email: string, password: string) => {
-    console.log('🧪 useAuthTest: Login attempt:', email);
+    console.log('useAuthTest: Login attempt:', email);
     
     if (email === 'alice@email.com' && password === 'password') {
       const mockUser: User = {
@@ -72,16 +72,16 @@ export const useAuthTest = () => {
       
       localStorage.setItem('user_id', '123');
       setAuthState({ user: mockUser, loading: false });
-      console.log('🧪 useAuthTest: Login successful');
+      console.log('useAuthTest: Login successful');
       return { user: mockUser };
     } else {
-      console.log('🧪 useAuthTest: Invalid credentials');
+      console.log('useAuthTest: Invalid credentials');
       return { error: 'Invalid email or password' };
     }
   };
 
   const logout = () => {
-    console.log('🧪 useAuthTest: Logging out');
+    console.log('useAuthTest: Logging out');
     localStorage.removeItem('user_id');
     setAuthState({ user: null, loading: false });
     navigate('/auth');
