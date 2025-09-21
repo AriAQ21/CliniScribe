@@ -17,12 +17,12 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): State {
-    console.error('🧪 ErrorBoundary caught error:', error);
+    console.error('ErrorBoundary caught error:', error);
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('🧪 ErrorBoundary componentDidCatch:', error, errorInfo);
+    console.error('ErrorBoundary componentDidCatch:', error, errorInfo);
     
     // Notify test environment if available
     if (typeof window !== 'undefined' && (window as any).ReactErrorBoundary) {
