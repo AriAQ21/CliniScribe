@@ -25,37 +25,37 @@ export const useAuth = () => {
 
   // Check for existing session on mount
   useEffect(() => {
-    console.log('🔐 useAuth: useEffect triggered');
+    console.log('useAuth: useEffect triggered');
     
     const checkAuth = async () => {
       try {
         const userId = localStorage.getItem('user_id');
-        console.log('🔐 Checking auth, user_id from localStorage:', userId);
+        console.log('Checking auth, user_id from localStorage:', userId);
         
         if (userId) {
-          console.log('🔐 Fetching user by ID:', userId);
+          console.log('Fetching user by ID:', userId);
           const { data: user, error } = await supabase
             .from('users')
             .select('*')
             .eq('user_id', parseInt(userId))
             .single();
 
-          console.log('🔐 Session restore response:', { user, error });
+          console.log('Session restore response:', { user, error });
 
           if (user && !error) {
-            console.log('🔐 Session restored successfully:', user);
+            console.log('Session restored successfully:', user);
             setAuthState({ user, loading: false });
           } else {
-            console.log('🔐 Session restore failed, clearing localStorage');
+            console.log('Session restore failed, clearing localStorage');
             localStorage.removeItem('user_id');
             setAuthState({ user: null, loading: false });
           }
         } else {
-          console.log('🔐 No user_id in localStorage');
+          console.log('No user_id in localStorage');
           setAuthState({ user: null, loading: false });
         }
       } catch (error) {
-        console.error('🔐 Session restore error:', error);
+        console.error('Session restore error:', error);
         localStorage.removeItem('user_id');
         setAuthState({ user: null, loading: false });
       }
@@ -65,7 +65,7 @@ export const useAuth = () => {
   }, []);
 
   const login = async (email: string, password: string) => {
-    console.log('🔐 Login attempt:', email);
+    console.log('Login attempt:', email);
     try {
       const { data: user, error } = await supabase
         .from('users')
@@ -74,20 +74,20 @@ export const useAuth = () => {
         .eq('password', password)
         .single();
 
-      console.log('🔐 Login response:', { user, error });
+      console.log('Login response:', { user, error });
 
       if (error || !user) {
-        console.log('🔐 Login failed:', error);
+        console.log('Login failed:', error);
         return { error: 'Invalid email or password' };
       }
 
       localStorage.setItem('user_id', user.user_id.toString());
-      console.log('🔐 Setting user state:', user);
+      console.log('Setting user state:', user);
       setAuthState({ user, loading: false });
-      console.log('🔐 Login successful, isAuthenticated:', !!user);
+      console.log('Login successful, isAuthenticated:', !!user);
       return { user };
     } catch (error) {
-      console.log('🔐 Login error:', error);
+      console.log('Login error:', error);
       return { error: 'Login failed' };
     }
   };
