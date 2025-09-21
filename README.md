@@ -17,7 +17,7 @@ CliniScribe/
 
 1. **Setup storage directories and HF token** (first time only):
 
-In the .env file, update the storage directories to match your server workspace:
+In the root .env file and the backend/.env file, update the storage directories to match your server workspace and add HF token:
 
    ```bash
    HF_TOKEN="example-not-a-token"
