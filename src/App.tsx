@@ -13,9 +13,9 @@ import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  console.log('🧪 ProtectedRoute rendering');
+  console.log('ProtectedRoute rendering');
   const { isAuthenticated, loading } = useAuth();
-  console.log('🧪 ProtectedRoute auth state:', { isAuthenticated, loading });
+  console.log('ProtectedRoute auth state:', { isAuthenticated, loading });
   
   if (loading) {
     return <div>Loading...</div>;
@@ -35,7 +35,7 @@ const RootRedirect = () => {
 };
 
 const App = () => {
-  console.log('🧪 App component rendering');
+  console.log('App component rendering');
   
   return (
     <ErrorBoundary>
