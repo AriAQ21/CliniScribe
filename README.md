@@ -37,12 +37,6 @@ In the .env file, update the storage directories to match your server workspace:
    - Backend API: http://localhost:8000
    - Database: localhost:5432
 
-  check:
-   - BACKEND_PORT="8002"
-DB_PORT="5432"
-FRONTEND_PORT="8081"
-MODEL_PORT="5005"
-  
 ## Services
 
 - **Frontend** (Port 8081): React development server
